@@ -1,0 +1,17 @@
+{
+  "name": "futboljoven",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Player Development & Performance Management System",
+  "scripts": {
+    "dev:api": "pnpm --filter @futboljoven/api dev",
+    "dev:web": "pnpm --filter @futboljoven/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

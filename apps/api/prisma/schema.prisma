@@ -1,0 +1,425 @@
+// FutbolJoven — Player Development & Performance Management System
+// Prisma schema. Entities marked [MVP] have full CRUD + UI in this pass.
+// Entities marked [FUTURE] exist so later phases (nutrition, physical,
+// reports, notifications) don't require a redesign — they are migrated
+// now but have no business logic/UI yet.
+//
+// NOTE on datasource: this is configured for SQLite so the project runs
+// out of the box in any environment (no external DB service required).
+// PostgreSQL 17 is already installed on this machine as the intended
+// production engine (see README "Switching to PostgreSQL"). Because the
+// SQLite connector doesn't support native enums or scalar list fields,
+// fixed-choice fields below are plain `String` (validated at the
+// application boundary via the zod enums in packages/shared) instead of
+// Prisma `enum`, and `Player.secondaryPositions` is a small join table
+// instead of an array column — both patterns work unchanged on Postgres
+// too, so switching datasources later needs no model changes.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Club / Season / Category / Team  [MVP]
+// ---------------------------------------------------------------------------
+
+model Club {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seasons Season[]
+}
+
+model Season {
+  id        String   @id @default(uuid())
+  clubId    String
+  club      Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teams       Team[]
+  evaluations Evaluation[]
+
+  @@index([clubId])
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String
+  order     Int      @default(0)
+  minAge    Int?
+  maxAge    Int?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teams Team[]
+
+  @@unique([name])
+}
+
+model Team {
+  id         String   @id @default(uuid())
+  name       String
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  seasonId   String
+  season     Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  players         Player[]
+  playerHistory   PlayerTeamHistory[]
+  userAssignments UserTeamAssignment[]
+  evaluations     Evaluation[]
+
+  @@unique([categoryId, seasonId])
+  @@index([seasonId])
+}
+
+// ---------------------------------------------------------------------------
+// Players  [MVP]
+// ---------------------------------------------------------------------------
+// status: ACTIVE | INJURED | SUSPENDED | INACTIVE | LEFT_CLUB
+// dominantFoot: LEFT | RIGHT | BOTH
+// primaryPosition / PlayerSecondaryPosition.position:
+//   GOALKEEPER | CENTER_BACK | FULL_BACK | DEFENSIVE_MIDFIELDER |
+//   CENTRAL_MIDFIELDER | ATTACKING_MIDFIELDER | WINGER | STRIKER
+// (see packages/shared/src/schemas.ts for the canonical zod enums)
+
+model Player {
+  id          String   @id @default(uuid())
+  firstName   String
+  lastName    String
+  sportName   String?
+  birthDate   DateTime
+  nationality String?
+  country     String?
+  city        String?
+  photoUrl    String?
+  documentId  String?
+
+  joinDate   DateTime
+  exitDate   DateTime?
+  exitReason String?
+
+  currentTeamId String?
+  currentTeam   Team? @relation(fields: [currentTeamId], references: [id], onDelete: SetNull)
+
+  jerseyNumber    Int?
+  primaryPosition String?
+  dominantFoot    String?
+  height          Float?
+  weight          Float?
+  status          String @default("ACTIVE")
+  notes           String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  secondaryPositions PlayerSecondaryPosition[]
+  teamHistory        PlayerTeamHistory[]
+  evaluations        Evaluation[]
+  nutritionRecords   NutritionRecord[]
+  physicalRecords    PhysicalRecord[]
+  observations       Observation[]
+
+  @@index([currentTeamId])
+  @@index([status])
+  @@index([lastName, firstName])
+}
+
+model PlayerSecondaryPosition {
+  id       String @id @default(uuid())
+  playerId String
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  position String
+
+  @@unique([playerId, position])
+}
+
+/// Trajectory of a player across teams/categories/seasons over time.
+model PlayerTeamHistory {
+  id        String    @id @default(uuid())
+  playerId  String
+  player    Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  teamId    String
+  team      Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  startDate DateTime
+  endDate   DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([playerId, startDate])
+  @@index([teamId])
+}
+
+// ---------------------------------------------------------------------------
+// Users / RBAC  [MVP]
+// ---------------------------------------------------------------------------
+
+model Role {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  name      String
+  isSystem  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users           User[]
+  rolePermissions RolePermission[]
+}
+
+model Permission {
+  id          String @id @default(uuid())
+  key         String @unique
+  description String
+
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  roleId       String
+  role         Role      @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  isDemo       Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  teamAssignments  UserTeamAssignment[]
+  refreshTokens    RefreshToken[]
+  evaluations      Evaluation[]      @relation("EvaluationEvaluator")
+  auditLogs        AuditLog[]
+  observations     Observation[]
+  nutritionRecords NutritionRecord[] @relation("NutritionRecorder")
+  physicalRecords  PhysicalRecord[]  @relation("PhysicalRecorder")
+
+  @@index([roleId])
+}
+
+/// Scopes a coach/professional to the teams they're allowed to work with.
+model UserTeamAssignment {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, teamId])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Evaluations  [MVP] — configurable dimensions/metrics/scale
+// ---------------------------------------------------------------------------
+
+model EvaluationScale {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  name      String
+  minValue  Int
+  maxValue  Int
+  labels    String // JSON-encoded Record<string, string>; see packages/shared DEFAULT_SCALE.labels
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  dimensions EvaluationDimension[]
+}
+
+model EvaluationDimension {
+  id       String          @id @default(uuid())
+  key      String          @unique
+  name     String
+  order    Int             @default(0)
+  isActive Boolean         @default(true)
+  scaleId  String
+  scale    EvaluationScale @relation(fields: [scaleId], references: [id], onDelete: Restrict)
+
+  metrics EvaluationMetric[]
+  scores  EvaluationScore[]
+
+  @@index([scaleId])
+}
+
+model EvaluationMetric {
+  id          String              @id @default(uuid())
+  dimensionId String
+  dimension   EvaluationDimension @relation(fields: [dimensionId], references: [id], onDelete: Cascade)
+  name        String
+  order       Int                 @default(0)
+  isActive    Boolean             @default(true)
+
+  scores EvaluationScore[]
+
+  @@index([dimensionId])
+}
+
+/// One evaluation "session" for one player. Never edited after scores are
+/// added — corrections are made by creating a new Evaluation so history
+/// stays intact for evolution charts.
+/// type: MATCH | TRAINING | PERIOD
+model Evaluation {
+  id          String   @id @default(uuid())
+  playerId    String
+  player      Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  teamId      String
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  seasonId    String
+  season      Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  evaluatorId String
+  evaluator   User     @relation("EvaluationEvaluator", fields: [evaluatorId], references: [id], onDelete: Restrict)
+  date        DateTime
+  type        String
+  context     String?
+  observation String?
+  isDemo      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  scores EvaluationScore[]
+
+  @@index([playerId, date])
+  @@index([teamId, date])
+}
+
+model EvaluationScore {
+  id           String              @id @default(uuid())
+  evaluationId String
+  evaluation   Evaluation          @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  dimensionId  String
+  dimension    EvaluationDimension @relation(fields: [dimensionId], references: [id], onDelete: Restrict)
+  metricId     String?
+  metric       EvaluationMetric?   @relation(fields: [metricId], references: [id], onDelete: SetNull)
+  value        Float
+  comment      String?
+
+  @@index([evaluationId])
+  @@index([dimensionId])
+}
+
+// ---------------------------------------------------------------------------
+// Audit  [MVP]
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String
+  entityId   String
+  oldValue   String? // JSON-encoded snapshot
+  newValue   String? // JSON-encoded snapshot
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// [FUTURE] Nutrition / Physical / Observations / Reports / Notifications
+// Migrated now so these phases don't require a schema redesign later.
+// ---------------------------------------------------------------------------
+
+model NutritionRecord {
+  id                String   @id @default(uuid())
+  playerId          String
+  player            Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  recordedById      String
+  recordedBy        User     @relation("NutritionRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  date              DateTime
+  weight            Float?
+  height            Float?
+  bodyFatPercent    Float?
+  muscleMassPercent Float?
+  status            String?
+  observations      String?
+  recommendations   String?
+  createdAt         DateTime @default(now())
+
+  @@index([playerId, date])
+}
+
+model PhysicalRecord {
+  id           String   @id @default(uuid())
+  playerId     String
+  player       Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  recordedById String
+  recordedBy   User     @relation("PhysicalRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  date         DateTime
+  metrics      String // JSON-encoded metric map
+  observations String?
+  createdAt    DateTime @default(now())
+
+  @@index([playerId, date])
+}
+
+model Observation {
+  id        String   @id @default(uuid())
+  playerId  String
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  category  String
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([playerId, createdAt])
+}
+
+model Report {
+  id            String   @id @default(uuid())
+  type          String
+  scope         String // JSON-encoded scope filter
+  generatedById String?
+  fileUrl       String?
+  createdAt     DateTime @default(now())
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  body      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
