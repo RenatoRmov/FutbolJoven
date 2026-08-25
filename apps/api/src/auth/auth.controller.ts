@@ -8,19 +8,25 @@ import { CurrentUser } from "./decorators/current-user.decorator";
 import type { AuthenticatedUser } from "./auth.types";
 
 const isProd = process.env.NODE_ENV === "production";
+// Frontend (Vercel) and API (Railway) are different registrable domains in
+// production, so browsers treat them as cross-site — SameSite=Lax cookies
+// would be silently dropped on fetch() calls. "None" (only valid alongside
+// Secure, which prod already sets) is required for that split-domain setup.
+// Local dev keeps "lax" since localhost:3000/3001 are same-site.
+const cookieSameSite = isProd ? "none" : "lax";
 
 function setAuthCookies(res: Response, accessToken: string, refreshToken: string, accessMaxAge: number, refreshMaxAge: number) {
   res.cookie("access_token", accessToken, {
     httpOnly: true,
     secure: isProd,
-    sameSite: "lax",
+    sameSite: cookieSameSite,
     maxAge: accessMaxAge,
     path: "/",
   });
   res.cookie("refresh_token", refreshToken, {
     httpOnly: true,
     secure: isProd,
-    sameSite: "lax",
+    sameSite: cookieSameSite,
     maxAge: refreshMaxAge,
     path: "/api/auth",
   });

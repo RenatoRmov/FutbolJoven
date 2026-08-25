@@ -147,9 +147,45 @@ pnpm --filter @futboljoven/web build      # build de Next.js
 
 Notas de deploy:
 - El backend necesita `DATABASE_URL` apuntando a PostgreSQL, y los secretos JWT vía variables de entorno (nunca hardcodeados).
-- Correr `prisma migrate deploy` (no `migrate dev`) en el pipeline de deploy.
 - El frontend necesita `NEXT_PUBLIC_API_URL` apuntando a la URL pública de la API, y la API necesita `WEB_ORIGIN` apuntando al dominio del frontend para que CORS + cookies funcionen.
 - Fotos de jugador: hoy no hay endpoint de upload implementado; el campo `Player.photoUrl` y la arquitectura (`UPLOADS_DIR` en `.env`) están preparados para agregar un `StorageAdapter` (local en dev, S3-compatible en producción) en la siguiente fase.
+
+## Deploy: Vercel (frontend) + Railway (backend + Postgres)
+
+Se eligió esta combinación en vez de "todo en Vercel" porque Vercel corre funciones *serverless* sin estado — no puede sostener un proceso NestJS persistente ni una base de datos con archivo (SQLite). Railway sí: proceso Node siempre activo + PostgreSQL gestionada, con capa gratuita/muy económica para un club chico.
+
+**Por qué existe `apps/api/prisma/schema.production.prisma`**: Prisma no permite que el `provider` del datasource sea dinámico por variable de entorno (solo la `url` sí) — por eso hay dos archivos de schema idénticos salvo el provider: `schema.prisma` (`sqlite`, desarrollo local, cero configuración) y `schema.production.prisma` (`postgresql`, usado únicamente en el build de producción vía `infra/Dockerfile.api`). Si cambiás el modelo de datos, replicá el cambio en ambos archivos.
+
+### Backend en Railway
+
+1. [railway.app](https://railway.app) → "Login with GitHub" (misma cuenta que ya usás en GitHub).
+2. "New Project" → "Deploy from GitHub repo" → elegí `RenatoRmov/FutbolJoven`.
+3. En la configuración del servicio: **Dockerfile Path** = `infra/Dockerfile.api`, **Root Directory** = `.` (raíz del repo).
+4. "New" → "Database" → "Add PostgreSQL" dentro del mismo proyecto — Railway conecta automáticamente `DATABASE_URL` al servicio si los agregás al mismo proyecto (o copiá la URL manualmente a la variable de abajo).
+5. Variables de entorno del servicio backend:
+   ```
+   DATABASE_URL=<la que genera el plugin de Postgres de Railway>
+   JWT_ACCESS_SECRET=<string aleatorio largo, distinto del de dev>
+   JWT_REFRESH_SECRET=<otro string aleatorio largo>
+   JWT_ACCESS_TTL=15m
+   JWT_REFRESH_TTL=7d
+   WEB_ORIGIN=https://<tu-dominio-de-vercel>.vercel.app
+   NODE_ENV=production
+   ```
+6. Deploy. El contenedor corre `prisma db push` contra la Postgres de Railway al arrancar (crea el schema en una base vacía) y después levanta el servidor. Railway te da una URL pública tipo `https://futboljoven-api-production.up.railway.app`.
+7. Para recargar los 194 jugadores reales en esta base nueva: entrá a `/import-export` en el frontend ya deployado (una vez conectado a esta API) y subí de nuevo el Excel con el plantel — es la misma vía que se usó la primera vez, no hace falta un script aparte.
+
+### Frontend en Vercel
+
+Ya preparado con `apps/web/vercel.json` (build/install commands para el monorepo pnpm). Desde `apps/web`:
+
+```bash
+vercel link      # conecta la carpeta a un proyecto de Vercel (crea uno nuevo si no existe)
+vercel env add NEXT_PUBLIC_API_URL production   # pegá la URL de Railway del paso anterior
+vercel --prod
+```
+
+O por el dashboard de Vercel: "Add New Project" → importar `RenatoRmov/FutbolJoven` → **Root Directory** = `apps/web` → variable de entorno `NEXT_PUBLIC_API_URL` = URL de Railway → Deploy.
 
 ## Roadmap (fases siguientes)
 

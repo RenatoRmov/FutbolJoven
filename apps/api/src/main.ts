@@ -14,16 +14,18 @@ async function bootstrap() {
   // hundred players) as JSON — the default body-parser limit is too small.
   app.use(json({ limit: "5mb" }));
   app.enableCors({
-    origin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
+    origin: (process.env.WEB_ORIGIN ?? "http://localhost:3000").split(",").map((o) => o.trim()),
     credentials: true,
   });
   app.useGlobalFilters(new HttpExceptionFilter());
   app.setGlobalPrefix("api");
 
-  const port = process.env.API_PORT ?? 3001;
+  // Hosting platforms (Railway, Render, etc.) inject PORT and expect the
+  // app to bind to it; API_PORT/3001 is the local-dev fallback.
+  const port = process.env.PORT ?? process.env.API_PORT ?? 3001;
   await app.listen(port);
   // eslint-disable-next-line no-console
-  console.log(`FutbolJoven API listening on http://localhost:${port}/api`);
+  console.log(`FutbolJoven API listening on port ${port}`);
 }
 
 bootstrap();
