@@ -46,6 +46,18 @@ El club entregó documentos internos reales (planilla de control semanal, matriz
 
 **Deliberadamente fuera de esta plataforma** (dominio distinto — gestión administrativa/financiera del club, no desarrollo de jugadores): la matriz financiera del club (ingresos/gastos, proyección presupuestaria a 10 años) y la carta Gantt anual de 52 semanas con tareas por responsable. Quedan documentadas acá como posible módulo futuro si el club lo pide explícitamente.
 
+## Fase 2b: Import/Export de Excel + plantel real cargado
+
+La Planilla real del club (`Planilla Control de Jugadores Final.xlsx`) tenía **194 jugadores reales** con nombre, RUT (cédula chilena) y fecha de nacimiento en sus 7 categorías. Antes de cargarlos se construyó el módulo de importación/exportación completo (era el único camino aceptable — nunca se insertan datos personales de menores "a mano" por script sin una vía revisable y reutilizable):
+
+- `GET /api/import/players/template` — descarga la plantilla `.xlsx` (columnas obligatorias marcadas con `*`, fila de ejemplo, hoja de instrucciones) — ver `packages/shared/src/import.ts` → `PLAYER_IMPORT_COLUMNS` para la definición única de columnas.
+- `POST /api/import/players/preview` — sube un `.xlsx`, valida cada fila (categoría existente, fechas en varios formatos, tipos) y clasifica cada una en **a crear / a actualizar (por RUT) / duplicada dentro del archivo / con error** — sin escribir nada en la base todavía.
+- `POST /api/import/players/confirm` — recibe las filas ya validadas y recién ahí crea/actualiza jugadores (reutiliza `PlayersService.create`/`update`, así que el historial de categorías y la auditoría quedan igual que si se cargaran a mano).
+- `GET /api/export/players` — exporta a `.xlsx` los jugadores visibles para el usuario (respeta el mismo scoping por equipo que el resto de la API).
+- Pantalla **Importar / Exportar** en el frontend con la vista previa, el resumen (importados/actualizados/duplicados/errores) y la exportación.
+
+El plantel real se cargó con este mismo mecanismo (no con un script aparte): los datos de identidad de las 7 hojas de la Planilla se transformaron al formato de la plantilla y se subieron por `/api/import/players/preview` → `/api/import/players/confirm`, quedando 194 jugadores reales sumados a los datos demo. Solo se importó identidad básica (nombre, RUT, fecha de nacimiento, categoría, nacionalidad) — la Planilla no traía posición/dorsal por jugador en esa hoja, así que esos campos quedan vacíos hasta que se completen desde la ficha del jugador.
+
 ## Base de datos: SQLite (dev) vs PostgreSQL (producción)
 
 El schema fue diseñado para PostgreSQL (ver sección 36 del brief original), pero el entorno donde se construyó este proyecto tenía Docker Desktop roto (falta el kernel de WSL2) y la instalación nativa de PostgreSQL 17 quedó sin contraseña de superusuario conocida y sin poder editar `pg_hba.conf` por restricciones del sandbox. Para no bloquear el desarrollo, **el datasource de Prisma está configurado con SQLite** (`apps/api/prisma/schema.prisma`, `apps/api/.env` → `DATABASE_URL="file:./dev.db"`), que no requiere ningún servicio corriendo.
@@ -111,7 +123,9 @@ Después de correr el seed (`prisma db seed`), podés entrar con cualquiera de e
 | fisico@futboljoven.demo | Preparador Físico |
 | scout@futboljoven.demo | Scout / Analista |
 
-El seed genera 8 categorías (Sub-13 a Proyección Sub-20, Femenina Juvenil y Primer Equipo, siguiendo la estructura real del club) en 2 temporadas, 120 jugadores ficticios con trayectoria entre categorías y ~700 evaluaciones históricas ponderadas, además de registros de nutrición, lesiones y checklist de documentación — todo marcado `isDemo: true` en la base.
+El seed genera 8 categorías (Sub-13 a Sub-20, Femenina Juvenil y Primer Equipo, con los nombres reales del club) en 2 temporadas, 120 jugadores ficticios con trayectoria entre categorías y ~700 evaluaciones históricas ponderadas, además de registros de nutrición, lesiones y checklist de documentación — todo marcado `isDemo: true` en la base.
+
+Además, esta instancia local ya tiene cargados **194 jugadores reales** (identidad únicamente: nombre, RUT, fecha de nacimiento, categoría) importados desde la Planilla del club vía el módulo de Import/Export (ver "Fase 2b" más arriba) — no vienen del seed, así que si borrás y recreás la base de datos **no se regeneran solos**; para volver a cargarlos hay que repetir la importación desde `/import-export` con un Excel en el formato de la plantilla.
 
 > El seed **no es idempotente para jugadores/evaluaciones** (cada corrida crea filas nuevas). Si necesitás re-sembrar, borrá `apps/api/prisma/dev.db` primero y volvé a correr `prisma migrate deploy` + `prisma db seed` para partir de una base limpia.
 
@@ -121,7 +135,7 @@ El seed genera 8 categorías (Sub-13 a Proyección Sub-20, Femenina Juvenil y Pr
 pnpm --filter @futboljoven/api test
 ```
 
-Corre una suite e2e (NestJS + Supertest) contra una base SQLite de test aislada (se recrea automáticamente antes de cada corrida). Cubre: login correcto/incorrecto, rechazo de requests sin sesión, bloqueo de endpoints sin el permiso requerido, scoping de jugadores por equipo asignado (un coach no puede ver ni editar jugadores fuera de sus equipos), el cálculo de evolución/radar a partir de múltiples evaluaciones, el cálculo de Nota Final/Estatus contra los umbrales reales, y la separación de datos sensibles entre nutrición y físico/médico.
+Corre una suite e2e (NestJS + Supertest) contra una base SQLite de test aislada (se recrea automáticamente antes de cada corrida, 20 tests). Cubre: login correcto/incorrecto, rechazo de requests sin sesión, bloqueo de endpoints sin el permiso requerido, scoping de jugadores por equipo asignado (un coach no puede ver ni editar jugadores fuera de sus equipos), el cálculo de evolución/radar a partir de múltiples evaluaciones, el cálculo de Nota Final/Estatus contra los umbrales reales, la separación de datos sensibles entre nutrición y físico/médico, y el flujo de import/export (categoría inexistente → error, mismo RUT en dos cargas → detecta actualización en vez de duplicado, permisos de `data.import`/`data.export`).
 
 ## Build para producción
 
@@ -155,9 +169,11 @@ Ya construido en la Fase 2 (modelo real del club):
 - Documentación/habilitación de jugadores (checklist real de 18 documentos, incluyendo protocolo de transferencia internacional de menores).
 - Dashboard con gráficos reales (barras por categoría, distribución de estatus, tendencia del club, jugadores destacados/en seguimiento).
 - Taxonomía real de posiciones y género de jugador.
+- Import/Export de Excel para jugadores (plantilla descargable, vista previa con validación de duplicados/errores, confirmación explícita, exportación con el mismo scoping por rol) — usado para cargar los 194 jugadores reales del club.
 
 Pendiente (schema ya migrado, sin UI/lógica):
-- Informes PDF (jugador y dirección deportiva) y exportación/importación masiva a Excel.
+- Informes PDF (jugador y dirección deportiva).
+- Import/Export de Excel para evaluaciones, nutrición y otros módulos (hoy solo existe para jugadores).
 - Comparación entre jugadores y entre categorías, analítica avanzada adicional.
 - Notificaciones (modelo `Notification` listo, sin canal de envío real).
 - App móvil (Expo) consumiendo la misma API, con soporte offline.

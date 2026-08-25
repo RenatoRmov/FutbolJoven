@@ -3,9 +3,19 @@ import { Test } from "@nestjs/testing";
 import request from "supertest";
 import cookieParser from "cookie-parser";
 import * as bcrypt from "bcryptjs";
-import { ALL_PERMISSIONS, PERMISSIONS } from "@futboljoven/shared";
+import * as ExcelJS from "exceljs";
+import { ALL_PERMISSIONS, PERMISSIONS, PLAYER_IMPORT_COLUMNS } from "@futboljoven/shared";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+
+async function buildImportXlsx(rows: Record<string, string>[]): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Jugadores");
+  sheet.columns = PLAYER_IMPORT_COLUMNS.map((c) => ({ header: c.label, key: c.key }));
+  sheet.addRow(Object.fromEntries(PLAYER_IMPORT_COLUMNS.map((c) => [c.key, c.example]))); // example row, skipped by the parser
+  for (const row of rows) sheet.addRow(row);
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
 
 describe("FutbolJoven API (e2e)", () => {
   let app: INestApplication;
@@ -340,6 +350,63 @@ describe("FutbolJoven API (e2e)", () => {
     it("blocks a coach from viewing nutrition data entirely", async () => {
       const res = await request(app.getHttpServer()).get(`/api/nutrition/player/${playerAId}`).set("Cookie", coachCookie);
       expect(res.status).toBe(403);
+    });
+  });
+
+  describe("Import/Export", () => {
+    it("blocks a coach without data.import from previewing an import file", async () => {
+      const buffer = await buildImportXlsx([]);
+      const res = await request(app.getHttpServer())
+        .post("/api/import/players/preview")
+        .set("Cookie", coachCookie)
+        .attach("file", buffer, "jugadores.xlsx");
+      expect(res.status).toBe(403);
+    });
+
+    it("flags a row with an unknown category as an error", async () => {
+      const buffer = await buildImportXlsx([
+        { documentId: "11111111-1", firstName: "Test", lastName: "Uno", birthDate: "2011-01-01", category: "Categoría Inexistente" },
+      ]);
+      const res = await request(app.getHttpServer())
+        .post("/api/import/players/preview")
+        .set("Cookie", adminCookie)
+        .attach("file", buffer, "jugadores.xlsx");
+      expect(res.status).toBe(201);
+      expect(res.body.summary.errors).toBe(1);
+      expect(res.body.rows[0].outcome).toBe("error");
+    });
+
+    it("previews, confirms, and re-detects the same player as an update on a second import", async () => {
+      const rut = "22222222-2";
+      const buffer = await buildImportXlsx([
+        { documentId: rut, firstName: "Importado", lastName: "DePrueba", birthDate: "2011-05-05", category: "Test Sub-15" },
+      ]);
+
+      const previewRes = await request(app.getHttpServer())
+        .post("/api/import/players/preview")
+        .set("Cookie", adminCookie)
+        .attach("file", buffer, "jugadores.xlsx");
+      expect(previewRes.status).toBe(201);
+      expect(previewRes.body.summary).toMatchObject({ toCreate: 1, toUpdate: 0, errors: 0 });
+
+      const confirmRes = await request(app.getHttpServer())
+        .post("/api/import/players/confirm")
+        .set("Cookie", adminCookie)
+        .send({ rows: previewRes.body.rows });
+      expect(confirmRes.status).toBe(201);
+      expect(confirmRes.body).toMatchObject({ imported: 1, updated: 0 });
+
+      const secondPreview = await request(app.getHttpServer())
+        .post("/api/import/players/preview")
+        .set("Cookie", adminCookie)
+        .attach("file", buffer, "jugadores.xlsx");
+      expect(secondPreview.body.summary).toMatchObject({ toCreate: 0, toUpdate: 1, errors: 0 });
+    });
+
+    it("lets an admin export players to xlsx", async () => {
+      const res = await request(app.getHttpServer()).get("/api/export/players").set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toContain("spreadsheetml");
     });
   });
 });

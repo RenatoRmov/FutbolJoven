@@ -59,7 +59,7 @@ const PERMISSION_DESCRIPTIONS: Record<string, string> = {
 };
 
 // Category structure mirrors a real formative-football club: men's pathway
-// Sub-13 to Proyección Sub-20, a women's category spanning a broader age
+// Sub-13 to Sub-20, a women's category spanning a broader age
 // band, and Primer Equipo as the professional destination.
 const CATEGORY_DEFS = [
   { name: "Sub-13", order: 1, minAge: 12, maxAge: 13, gender: "MALE" as const },
@@ -67,7 +67,7 @@ const CATEGORY_DEFS = [
   { name: "Sub-15", order: 3, minAge: 14, maxAge: 15, gender: "MALE" as const },
   { name: "Sub-16", order: 4, minAge: 15, maxAge: 16, gender: "MALE" as const },
   { name: "Sub-18", order: 5, minAge: 16, maxAge: 18, gender: "MALE" as const },
-  { name: "Proyección Sub-20", order: 6, minAge: 18, maxAge: 20, gender: "MALE" as const },
+  { name: "Sub-20", order: 6, minAge: 18, maxAge: 20, gender: "MALE" as const },
   { name: "Femenina Juvenil", order: 7, minAge: 13, maxAge: 21, gender: "FEMALE" as const },
   { name: "Primer Equipo", order: 8, minAge: 17, maxAge: 40, gender: "MALE" as const },
 ];

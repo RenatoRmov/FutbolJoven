@@ -17,6 +17,7 @@ const mainNav: NavItem[] = [
   { href: "/players", label: "Jugadores", perms: [PERMISSIONS.PLAYERS_VIEW_ALL, PERMISSIONS.PLAYERS_VIEW_ASSIGNED] },
   { href: "/evaluations", label: "Evaluaciones", perms: [PERMISSIONS.EVALUATIONS_VIEW_ALL, PERMISSIONS.EVALUATIONS_VIEW_ASSIGNED] },
   { href: "/audit", label: "Auditoría", perms: [PERMISSIONS.AUDIT_VIEW] },
+  { href: "/import-export", label: "Importar / Exportar", perms: [PERMISSIONS.DATA_IMPORT, PERMISSIONS.DATA_EXPORT] },
 ];
 
 const adminNav: NavItem[] = [

@@ -13,6 +13,7 @@ import { DashboardModule } from "./dashboard/dashboard.module";
 import { NutritionModule } from "./nutrition/nutrition.module";
 import { PhysicalModule } from "./physical/physical.module";
 import { PlayerDocumentsModule } from "./player-documents/player-documents.module";
+import { ImportExportModule } from "./import-export/import-export.module";
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { PlayerDocumentsModule } from "./player-documents/player-documents.modul
     NutritionModule,
     PhysicalModule,
     PlayerDocumentsModule,
+    ImportExportModule,
   ],
 })
 export class AppModule {}
