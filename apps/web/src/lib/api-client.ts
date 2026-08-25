@@ -1,4 +1,8 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+// Empty in production: /api/* is same-origin, proxied to Railway via the
+// rewrite in vercel.json (see the comment there and in auth.controller.ts —
+// this is what makes auth cookies first-party instead of cross-site).
+// Local dev overrides this via apps/web/.env.local.
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export class ApiError extends Error {
   constructor(
