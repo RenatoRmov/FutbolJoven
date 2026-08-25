@@ -1,5 +1,0 @@
-{
-  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
-  "buildCommand": "cd ../.. && pnpm --filter @futboljoven/shared build && pnpm --filter @futboljoven/web build",
-  "framework": "nextjs"
-}

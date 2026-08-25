@@ -17,3 +17,5 @@ apps/api/generated/
 *.db
 *.db-journal
 packages/shared/dist/
+
+.vercel
