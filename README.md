@@ -2,7 +2,7 @@
 
 Plataforma profesional de gestión, seguimiento y desarrollo de jugadores de fútbol formativo. Permite registrar jugadores, categorías y temporadas; evaluar periódicamente a cada jugador con dimensiones configurables (técnica, táctica, física, mental, resiliencia, social); visualizar su evolución histórica con gráficos radar y de línea de tiempo; y controlar el acceso a la información mediante roles y permisos aplicados tanto en frontend como en backend.
 
-Este repositorio contiene el **MVP funcional** descripto en el plan del proyecto: autenticación + RBAC, temporadas/categorías/equipos, jugadores con historial de trayectoria, evaluaciones configurables con evolución real, dashboard por rol, auditoría y datos de demostración. Los módulos de nutrición, físico, informes PDF, import/export de Excel, analítica avanzada, notificaciones y la app móvil quedan con su modelo de datos ya diseñado (ver `apps/api/prisma/schema.prisma`) pero sin UI/lógica todavía — son la fase siguiente del roadmap (más abajo).
+Este repositorio contiene dos fases: el **MVP** (auth/RBAC, temporadas/categorías/equipos, jugadores, evaluaciones, dashboard, auditoría) y una **Fase 2** que reemplaza varias suposiciones genéricas por el **modelo real de un club de fútbol formativo** (matriz de evaluación ponderada, clasificación de talento, nutrición, médico/lesiones y documentación de habilitación de jugadores) — ver "Fase 2: el modelo real del club" más abajo. Informes PDF, import/export de Excel, analítica avanzada, notificaciones y la app móvil quedan con su modelo de datos ya diseñado (ver `apps/api/prisma/schema.prisma`) pero sin UI/lógica todavía — son la fase siguiente del roadmap (más abajo).
 
 ## Stack y decisiones de arquitectura
 
@@ -30,6 +30,21 @@ Aunque Next.js permite server actions/API routes propias, se optó por una **API
 ### Evaluaciones configurables e historial inmutable
 
 `EvaluationScale`, `EvaluationDimension` y `EvaluationMetric` viven en DB y se seedean con los valores del prompt (escala 1-10, dimensiones técnica/táctica/física/mental/resiliencia/social) pero son editables desde el backend (`/api/evaluations/config/*`, permiso `evaluations.config.manage`). Cada evaluación crea una fila nueva en `Evaluation`/`EvaluationScore`; nunca se sobrescribe una puntuación anterior, por lo que los gráficos de evolución reflejan el historial real.
+
+## Fase 2: el modelo real del club
+
+El club entregó documentos internos reales (planilla de control semanal, matriz de evaluación, fichas de habilitación/médico/nutrición, y el "Programa de Desarrollo del Fútbol Joven") que reemplazan varias suposiciones genéricas de la Fase 1:
+
+- **Matriz de evaluación ponderada real**: Técnica 35%, Táctica 25%, Física 20%, Mental/Actitudinal 10%, Rendimiento/Minutos 10% (`packages/shared/src/evaluation.ts` → `DEFAULT_DIMENSIONS`, campo `weight` en `EvaluationDimension`). Cada evaluación calcula su **Nota Final** ponderada (`computeNotaFinal`) y un **Estatus de talento** — PROYECTADO / PROYECTABLE / EN DESARROLLO / LIMITADO / NO APTO — sobre umbrales reales (`computeTalentStatus`, `TALENT_STATUS_THRESHOLDS`). Nunca se guarda como valor fijo: se recalcula siempre con los pesos configurados en ese momento (`apps/api/src/evaluations/evaluations.service.ts`).
+- **Jugadores**: campo `gender` y taxonomía de posiciones real en español (Portero, Lateral Derecho/Izquierdo, Defensa Central, Mediocentro, Volante/Volante Ofensivo/Mixto, Extremo Der/Izq, Delantero Centro, Delantero).
+- **Nutrición** (`/api/nutrition`, pestaña "Nutrición" en el perfil del jugador): composición corporal, hábitos alimenticios, hidratación y resultados de laboratorio, según la ficha real del club.
+- **Médico y físico** (`/api/physical`, `/api/injuries`, pestaña "Físico y Salud"): baterías de test físicos periódicas (`PhysicalRecord`) y lesiones como eventos discretos (`Injury`, el "REGISTRO M" del club) — modelos separados a propósito, uno es periódico y el otro es un evento con fecha/severidad/recuperación.
+- **Documentación/Habilitación** (`/api/document-types`, `/api/players/:id/documents`, pestaña "Documentación"): checklist real de 18 documentos (ingreso, salida/traspaso, protocolo de inmigración para menores extranjeros), configurable vía `DocumentType`.
+- **Dashboard con gráficos reales** (pedido explícito): Nota Final promedio por categoría, distribución de Estatus del plantel, tendencia de la nota promedio del club, y listas de jugadores con mayor crecimiento/en seguimiento — diseñados siguiendo la skill de dataviz del equipo (formas por el trabajo del dato: barras para magnitud, no donut para reparto de estatus; colores de estado fijos, nunca generados).
+
+**Separación de datos sensibles** (exigida en el brief original): un nutricionista puede escribir en `/api/nutrition` pero no en `/api/evaluations`; un preparador físico puede escribir en `/api/physical`/`/api/injuries` pero no en `/api/nutrition`. Verificado con tests e2e (`apps/api/test/app.e2e-spec.ts`, describe "Sensitive data separation").
+
+**Deliberadamente fuera de esta plataforma** (dominio distinto — gestión administrativa/financiera del club, no desarrollo de jugadores): la matriz financiera del club (ingresos/gastos, proyección presupuestaria a 10 años) y la carta Gantt anual de 52 semanas con tareas por responsable. Quedan documentadas acá como posible módulo futuro si el club lo pide explícitamente.
 
 ## Base de datos: SQLite (dev) vs PostgreSQL (producción)
 
@@ -96,7 +111,9 @@ Después de correr el seed (`prisma db seed`), podés entrar con cualquiera de e
 | fisico@futboljoven.demo | Preparador Físico |
 | scout@futboljoven.demo | Scout / Analista |
 
-El seed genera 8 categorías (Sub-13 a Primer Equipo) en 2 temporadas, 120 jugadores ficticios con trayectoria entre categorías y ~700 evaluaciones históricas, todo marcado `isDemo: true` en la base.
+El seed genera 8 categorías (Sub-13 a Proyección Sub-20, Femenina Juvenil y Primer Equipo, siguiendo la estructura real del club) en 2 temporadas, 120 jugadores ficticios con trayectoria entre categorías y ~700 evaluaciones históricas ponderadas, además de registros de nutrición, lesiones y checklist de documentación — todo marcado `isDemo: true` en la base.
+
+> El seed **no es idempotente para jugadores/evaluaciones** (cada corrida crea filas nuevas). Si necesitás re-sembrar, borrá `apps/api/prisma/dev.db` primero y volvé a correr `prisma migrate deploy` + `prisma db seed` para partir de una base limpia.
 
 ## Tests
 
@@ -104,7 +121,7 @@ El seed genera 8 categorías (Sub-13 a Primer Equipo) en 2 temporadas, 120 jugad
 pnpm --filter @futboljoven/api test
 ```
 
-Corre una suite e2e (NestJS + Supertest) contra una base SQLite de test aislada (se recrea automáticamente antes de cada corrida). Cubre: login correcto/incorrecto, rechazo de requests sin sesión, bloqueo de endpoints sin el permiso requerido, scoping de jugadores por equipo asignado (un coach no puede ver ni editar jugadores fuera de sus equipos), y el cálculo de evolución/radar a partir de múltiples evaluaciones.
+Corre una suite e2e (NestJS + Supertest) contra una base SQLite de test aislada (se recrea automáticamente antes de cada corrida). Cubre: login correcto/incorrecto, rechazo de requests sin sesión, bloqueo de endpoints sin el permiso requerido, scoping de jugadores por equipo asignado (un coach no puede ver ni editar jugadores fuera de sus equipos), el cálculo de evolución/radar a partir de múltiples evaluaciones, el cálculo de Nota Final/Estatus contra los umbrales reales, y la separación de datos sensibles entre nutrición y físico/médico.
 
 ## Build para producción
 
@@ -132,10 +149,18 @@ Ya construido en esta pasada (Fase 1 — MVP):
 - Auditoría de cambios (quién, cuándo, qué cambió) sobre jugadores, evaluaciones y usuarios.
 - Datos de demostración realistas y tests e2e de los flujos críticos.
 
-Pendiente (schema ya migrado, sin UI/lógica — Fase 2/3):
-- Nutrición y físico: modelos `NutritionRecord`/`PhysicalRecord` listos; falta CRUD + gráficos + permisos específicos por dato sensible.
+Ya construido en la Fase 2 (modelo real del club):
+- Matriz de evaluación ponderada real, con Nota Final y clasificación de talento (Estatus) calculados sobre umbrales reales.
+- Nutrición, físico y lesiones — CRUD completo, permisos separados por dato sensible, pestañas dedicadas en el perfil del jugador.
+- Documentación/habilitación de jugadores (checklist real de 18 documentos, incluyendo protocolo de transferencia internacional de menores).
+- Dashboard con gráficos reales (barras por categoría, distribución de estatus, tendencia del club, jugadores destacados/en seguimiento).
+- Taxonomía real de posiciones y género de jugador.
+
+Pendiente (schema ya migrado, sin UI/lógica):
 - Informes PDF (jugador y dirección deportiva) y exportación/importación masiva a Excel.
-- Comparación entre jugadores y entre categorías, analítica avanzada (tendencias, ranking interno).
+- Comparación entre jugadores y entre categorías, analítica avanzada adicional.
 - Notificaciones (modelo `Notification` listo, sin canal de envío real).
 - App móvil (Expo) consumiendo la misma API, con soporte offline.
 - Hooks de IA para resúmenes/detección de tendencias (asistencia, nunca reemplazo del criterio del cuerpo técnico).
+
+Deliberadamente fuera de alcance (dominio distinto — ver "Fase 2" arriba): módulo financiero del club y carta Gantt anual de planificación operativa.

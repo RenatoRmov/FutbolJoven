@@ -30,12 +30,15 @@ export const PERMISSIONS = {
 
   AUDIT_VIEW: "audit.view",
 
-  // Reserved for future phases — permissions already exist so RBAC checks
-  // can be wired without a schema change when the modules are built.
   NUTRITION_VIEW: "nutrition.view",
   NUTRITION_MANAGE: "nutrition.manage",
   PHYSICAL_VIEW: "physical.view",
   PHYSICAL_MANAGE: "physical.manage",
+  PLAYERS_DOCUMENTS_VIEW: "players.documents.view",
+  PLAYERS_DOCUMENTS_MANAGE: "players.documents.manage",
+
+  // Reserved for future phases — permissions already exist so RBAC checks
+  // can be wired without a schema change when the modules are built.
   REPORTS_GENERATE: "reports.generate",
   DATA_EXPORT: "data.export",
   DATA_IMPORT: "data.import",
@@ -72,6 +75,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = 
     P.PHYSICAL_VIEW,
     P.REPORTS_GENERATE,
     P.DATA_EXPORT,
+    P.PLAYERS_DOCUMENTS_VIEW,
   ],
   COORDINATOR: [
     P.PLAYERS_VIEW_ALL,
@@ -80,6 +84,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = 
     P.EVALUATIONS_CREATE_ALL,
     P.DASHBOARD_VIEW_GLOBAL,
     P.REPORTS_GENERATE,
+    P.PLAYERS_DOCUMENTS_VIEW,
+    P.PLAYERS_DOCUMENTS_MANAGE,
   ],
   COACH: [
     P.PLAYERS_VIEW_ASSIGNED,

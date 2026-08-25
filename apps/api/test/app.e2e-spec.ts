@@ -13,11 +13,14 @@ describe("FutbolJoven API (e2e)", () => {
 
   let adminCookie: string;
   let coachCookie: string;
+  let nutritionistCookie: string;
+  let physicalTrainerCookie: string;
 
   let teamAId: string;
   let teamBId: string;
   let playerAId: string;
   let dimensionId: string;
+  let physicalDimensionId: string;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -93,6 +96,37 @@ describe("FutbolJoven API (e2e)", () => {
       },
     });
 
+    const nutritionRole = await prisma.role.create({
+      data: {
+        key: "TEST_NUTRITIONIST",
+        name: "Test Nutritionist",
+        isSystem: true,
+        rolePermissions: {
+          create: allPermissions
+            .filter((p) => [PERMISSIONS.NUTRITION_VIEW, PERMISSIONS.NUTRITION_MANAGE, PERMISSIONS.PLAYERS_VIEW_ALL].includes(p.key as any))
+            .map((p) => ({ permissionId: p.id })),
+        },
+      },
+    });
+    const physicalRole = await prisma.role.create({
+      data: {
+        key: "TEST_PHYSICAL",
+        name: "Test Physical Trainer",
+        isSystem: true,
+        rolePermissions: {
+          create: allPermissions
+            .filter((p) => [PERMISSIONS.PHYSICAL_VIEW, PERMISSIONS.PHYSICAL_MANAGE, PERMISSIONS.PLAYERS_VIEW_ALL].includes(p.key as any))
+            .map((p) => ({ permissionId: p.id })),
+        },
+      },
+    });
+    await prisma.user.create({
+      data: { email: "nutrition@test.local", passwordHash, firstName: "Nutri", lastName: "Test", roleId: nutritionRole.id },
+    });
+    await prisma.user.create({
+      data: { email: "physical@test.local", passwordHash, firstName: "Physio", lastName: "Test", roleId: physicalRole.id },
+    });
+
     const playerA = await prisma.player.create({
       data: { firstName: "PlayerA", lastName: "One", birthDate: new Date("2011-01-01"), joinDate: new Date("2026-01-01"), currentTeamId: teamA.id, status: "ACTIVE" },
     });
@@ -105,9 +139,13 @@ describe("FutbolJoven API (e2e)", () => {
       data: { key: "test-scale", name: "Test Scale", minValue: 1, maxValue: 10, labels: JSON.stringify({}) },
     });
     const dimension = await prisma.evaluationDimension.create({
-      data: { key: "technical", name: "Técnica", order: 1, scaleId: scale.id },
+      data: { key: "technical", name: "Técnica", order: 1, weight: 0.5, scaleId: scale.id },
     });
     dimensionId = dimension.id;
+    const physicalDimension = await prisma.evaluationDimension.create({
+      data: { key: "physical", name: "Física", order: 2, weight: 0.5, scaleId: scale.id },
+    });
+    physicalDimensionId = physicalDimension.id;
 
     void coachUser;
   }
@@ -132,6 +170,14 @@ describe("FutbolJoven API (e2e)", () => {
       const coachRes = await request(app.getHttpServer()).post("/api/auth/login").send({ email: "coach@test.local", password: "Test1234!" });
       expect(coachRes.status).toBe(200);
       coachCookie = extractCookie(coachRes);
+
+      const nutritionRes = await request(app.getHttpServer()).post("/api/auth/login").send({ email: "nutrition@test.local", password: "Test1234!" });
+      expect(nutritionRes.status).toBe(200);
+      nutritionistCookie = extractCookie(nutritionRes);
+
+      const physicalRes = await request(app.getHttpServer()).post("/api/auth/login").send({ email: "physical@test.local", password: "Test1234!" });
+      expect(physicalRes.status).toBe(200);
+      physicalTrainerCookie = extractCookie(physicalRes);
     });
 
     it("rejects requests with no session cookie", async () => {
@@ -217,6 +263,82 @@ describe("FutbolJoven API (e2e)", () => {
         .post("/api/evaluations")
         .set("Cookie", coachCookie)
         .send({ playerId: playerAId, teamId: teamBId, date: "2026-03-01", type: "MATCH", scores: [{ dimensionId, value: 5 }] });
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe("Nota Final / Estatus (real club weighted matrix)", () => {
+    it("computes a weighted Nota Final and maps it to the correct talent status", async () => {
+      // Técnica 8 * 0.5 + Física 6 * 0.5 = 7.0 -> "PROYECTABLE" (>= 6.62, < 8.83)
+      const res = await request(app.getHttpServer())
+        .post("/api/evaluations")
+        .set("Cookie", coachCookie)
+        .send({
+          playerId: playerAId,
+          teamId: teamAId,
+          date: "2026-05-01",
+          type: "MATCH",
+          scores: [
+            { dimensionId, value: 8 },
+            { dimensionId: physicalDimensionId, value: 6 },
+          ],
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.notaFinal).toBe(7);
+      expect(res.body.estatus).toBe("PROYECTABLE");
+    });
+
+    it("crosses into PROYECTADO once the weighted average passes the 8.83 threshold", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/api/evaluations")
+        .set("Cookie", coachCookie)
+        .send({
+          playerId: playerAId,
+          teamId: teamAId,
+          date: "2026-05-15",
+          type: "MATCH",
+          scores: [
+            { dimensionId, value: 9.5 },
+            { dimensionId: physicalDimensionId, value: 9 },
+          ],
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.notaFinal).toBe(9.25);
+      expect(res.body.estatus).toBe("PROYECTADO");
+    });
+  });
+
+  describe("Sensitive data separation (nutrition vs. physical)", () => {
+    it("lets a nutritionist write nutrition records but not evaluations", async () => {
+      const nutritionRes = await request(app.getHttpServer())
+        .post("/api/nutrition")
+        .set("Cookie", nutritionistCookie)
+        .send({ playerId: playerAId, date: "2026-05-01", weight: 60, height: 170 });
+      expect(nutritionRes.status).toBe(201);
+
+      const evalRes = await request(app.getHttpServer())
+        .post("/api/evaluations")
+        .set("Cookie", nutritionistCookie)
+        .send({ playerId: playerAId, teamId: teamAId, date: "2026-05-01", type: "MATCH", scores: [{ dimensionId, value: 5 }] });
+      expect(evalRes.status).toBe(403);
+    });
+
+    it("lets a physical trainer write physical/injury records but not nutrition", async () => {
+      const physicalRes = await request(app.getHttpServer())
+        .post("/api/physical")
+        .set("Cookie", physicalTrainerCookie)
+        .send({ playerId: playerAId, date: "2026-05-01", metrics: { velocidad: 8 } });
+      expect(physicalRes.status).toBe(201);
+
+      const nutritionRes = await request(app.getHttpServer())
+        .post("/api/nutrition")
+        .set("Cookie", physicalTrainerCookie)
+        .send({ playerId: playerAId, date: "2026-05-01", weight: 60 });
+      expect(nutritionRes.status).toBe(403);
+    });
+
+    it("blocks a coach from viewing nutrition data entirely", async () => {
+      const res = await request(app.getHttpServer()).get(`/api/nutrition/player/${playerAId}`).set("Cookie", coachCookie);
       expect(res.status).toBe(403);
     });
   });

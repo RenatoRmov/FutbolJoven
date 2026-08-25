@@ -93,9 +93,11 @@ model Team {
 // ---------------------------------------------------------------------------
 // status: ACTIVE | INJURED | SUSPENDED | INACTIVE | LEFT_CLUB
 // dominantFoot: LEFT | RIGHT | BOTH
-// primaryPosition / PlayerSecondaryPosition.position:
-//   GOALKEEPER | CENTER_BACK | FULL_BACK | DEFENSIVE_MIDFIELDER |
-//   CENTRAL_MIDFIELDER | ATTACKING_MIDFIELDER | WINGER | STRIKER
+// gender: MALE | FEMALE
+// primaryPosition / PlayerSecondaryPosition.position (real club taxonomy):
+//   PORTERO | LATERAL_DERECHO | LATERAL_IZQUIERDO | DEFENSA_CENTRAL |
+//   MEDIOCENTRO | VOLANTE | VOLANTE_OFENSIVO | VOLANTE_MIXTO |
+//   EXTREMO_DERECHO | EXTREMO_IZQUIERDO | DELANTERO_CENTRO | DELANTERO
 // (see packages/shared/src/schemas.ts for the canonical zod enums)
 
 model Player {
@@ -104,6 +106,7 @@ model Player {
   lastName    String
   sportName   String?
   birthDate   DateTime
+  gender      String?
   nationality String?
   country     String?
   city        String?
@@ -134,7 +137,9 @@ model Player {
   evaluations        Evaluation[]
   nutritionRecords   NutritionRecord[]
   physicalRecords    PhysicalRecord[]
+  injuries           Injury[]
   observations       Observation[]
+  documents          PlayerDocument[]
 
   @@index([currentTeamId])
   @@index([status])
@@ -219,6 +224,7 @@ model User {
   observations     Observation[]
   nutritionRecords NutritionRecord[] @relation("NutritionRecorder")
   physicalRecords  PhysicalRecord[]  @relation("PhysicalRecorder")
+  injuries         Injury[]          @relation("InjuryRecorder")
 
   @@index([roleId])
 }
@@ -268,6 +274,8 @@ model EvaluationDimension {
   key      String          @unique
   name     String
   order    Int             @default(0)
+  /// Fraction of the final weighted score (0-1). See packages/shared computeNotaFinal.
+  weight   Float           @default(0)
   isActive Boolean         @default(true)
   scaleId  String
   scale    EvaluationScale @relation(fields: [scaleId], references: [id], onDelete: Restrict)
@@ -357,6 +365,9 @@ model AuditLog {
 // Migrated now so these phases don't require a schema redesign later.
 // ---------------------------------------------------------------------------
 
+/// "Control Nutricional del Jugador" — matches the real club's monthly
+/// nutrition tracking sheet (composición corporal + hábitos alimenticios +
+/// hidratación + control médico-nutricional).
 model NutritionRecord {
   id                String   @id @default(uuid())
   playerId          String
@@ -364,14 +375,32 @@ model NutritionRecord {
   recordedById      String
   recordedBy        User     @relation("NutritionRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
   date              DateTime
+
+  // Composición corporal
   weight            Float?
   height            Float?
   bodyFatPercent    Float?
   muscleMassPercent Float?
-  status            String?
-  observations      String?
-  recommendations   String?
-  createdAt         DateTime @default(now())
+
+  // Hábitos alimenticios
+  mealsPerDay             Int?
+  macroBalanceNotes       String?
+  junkFoodFrequency       String?
+  mealScheduleNotes       String?
+
+  // Hidratación
+  dailyWaterLiters           Float?
+  postTrainingWeightLossPct  Float?
+  hydrationColorimetry       String?
+
+  // Control médico-nutricional (hierro, ferritina, perfil bioquímico, etc.)
+  labResults String? // JSON-encoded Record<string, string|number>
+
+  status          String?
+  observations    String?
+  recommendations String?
+  isDemo          Boolean  @default(false)
+  createdAt       DateTime @default(now())
 
   @@index([playerId, date])
 }
@@ -383,9 +412,31 @@ model PhysicalRecord {
   recordedById String
   recordedBy   User     @relation("PhysicalRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
   date         DateTime
-  metrics      String // JSON-encoded metric map
+  metrics      String // JSON-encoded metric map (resistencia, velocidad, fuerza, agilidad, potencia...)
   observations String?
   createdAt    DateTime @default(now())
+
+  @@index([playerId, date])
+}
+
+/// "REGISTRO M" — discrete injury events, separate from the periodic
+/// PhysicalRecord test batteries above.
+model Injury {
+  id                    String    @id @default(uuid())
+  playerId              String
+  player                Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  recordedById          String
+  recordedBy            User      @relation("InjuryRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  description           String
+  bodyPart              String?
+  date                  DateTime
+  severity              String? // MILD | MODERATE | SEVERE
+  expectedRecoveryDays  Int?
+  actualReturnDate      DateTime?
+  status                String    @default("ACTIVE") // ACTIVE | RECOVERING | CLEARED
+  painLevel             Int?
+  mobilityNotes         String?
+  createdAt             DateTime  @default(now())
 
   @@index([playerId, date])
 }
@@ -410,6 +461,40 @@ model Report {
   generatedById String?
   fileUrl       String?
   createdAt     DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Player eligibility / document checklist  — real club registration process
+// ---------------------------------------------------------------------------
+
+/// Configurable catalog of required documents (ingreso / salida / traspaso
+/// internacional de menores), seeded from the club's real checklist.
+model DocumentType {
+  id         String   @id @default(uuid())
+  key        String   @unique
+  name       String
+  category   String // INGRESO | SALIDA | INTERNACIONAL
+  isRequired Boolean  @default(true)
+  order      Int      @default(0)
+  isActive   Boolean  @default(true)
+
+  playerDocuments PlayerDocument[]
+}
+
+model PlayerDocument {
+  id             String       @id @default(uuid())
+  playerId       String
+  player         Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  documentTypeId String
+  documentType   DocumentType @relation(fields: [documentTypeId], references: [id], onDelete: Restrict)
+  status         String       @default("PENDING") // PENDING | SUBMITTED | EXPIRED | NOT_APPLICABLE
+  submittedDate  DateTime?
+  expiresDate    DateTime?
+  notes          String?
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([playerId, documentTypeId])
+  @@index([playerId])
 }
 
 model Notification {

@@ -10,6 +10,9 @@ import { UsersModule } from "./users/users.module";
 import { PlayersModule } from "./players/players.module";
 import { EvaluationsModule } from "./evaluations/evaluations.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
+import { NutritionModule } from "./nutrition/nutrition.module";
+import { PhysicalModule } from "./physical/physical.module";
+import { PlayerDocumentsModule } from "./player-documents/player-documents.module";
 
 @Module({
   imports: [
@@ -24,6 +27,9 @@ import { DashboardModule } from "./dashboard/dashboard.module";
     PlayersModule,
     EvaluationsModule,
     DashboardModule,
+    NutritionModule,
+    PhysicalModule,
+    PlayerDocumentsModule,
   ],
 })
 export class AppModule {}

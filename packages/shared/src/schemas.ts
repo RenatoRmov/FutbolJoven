@@ -8,15 +8,20 @@ export type LoginDto = z.infer<typeof loginSchema>;
 
 export const playerStatusEnum = z.enum(["ACTIVE", "INJURED", "SUSPENDED", "INACTIVE", "LEFT_CLUB"]);
 export const dominantFootEnum = z.enum(["LEFT", "RIGHT", "BOTH"]);
+export const playerGenderEnum = z.enum(["MALE", "FEMALE"]);
 export const playerPositionEnum = z.enum([
-  "GOALKEEPER",
-  "CENTER_BACK",
-  "FULL_BACK",
-  "DEFENSIVE_MIDFIELDER",
-  "CENTRAL_MIDFIELDER",
-  "ATTACKING_MIDFIELDER",
-  "WINGER",
-  "STRIKER",
+  "PORTERO",
+  "LATERAL_DERECHO",
+  "LATERAL_IZQUIERDO",
+  "DEFENSA_CENTRAL",
+  "MEDIOCENTRO",
+  "VOLANTE",
+  "VOLANTE_OFENSIVO",
+  "VOLANTE_MIXTO",
+  "EXTREMO_DERECHO",
+  "EXTREMO_IZQUIERDO",
+  "DELANTERO_CENTRO",
+  "DELANTERO",
 ]);
 
 export const createPlayerSchema = z.object({
@@ -24,6 +29,7 @@ export const createPlayerSchema = z.object({
   lastName: z.string().min(1).max(80),
   sportName: z.string().max(80).optional().nullable(),
   birthDate: z.coerce.date(),
+  gender: playerGenderEnum.optional().nullable(),
   nationality: z.string().max(80).optional().nullable(),
   country: z.string().max(80).optional().nullable(),
   city: z.string().max(80).optional().nullable(),
@@ -122,3 +128,75 @@ export const updateUserSchema = createUserSchema.partial().extend({
   isActive: z.boolean().optional(),
 });
 export type UpdateUserDto = z.infer<typeof updateUserSchema>;
+
+// ---------------------------------------------------------------------------
+// Nutrition
+// ---------------------------------------------------------------------------
+
+export const createNutritionRecordSchema = z.object({
+  playerId: z.string().uuid(),
+  date: z.coerce.date(),
+  weight: z.coerce.number().positive().max(200).optional().nullable(),
+  height: z.coerce.number().positive().max(250).optional().nullable(),
+  bodyFatPercent: z.coerce.number().min(0).max(100).optional().nullable(),
+  muscleMassPercent: z.coerce.number().min(0).max(100).optional().nullable(),
+  mealsPerDay: z.coerce.number().int().min(0).max(20).optional().nullable(),
+  dailyWaterLiters: z.coerce.number().min(0).max(20).optional().nullable(),
+  postTrainingWeightLossPct: z.coerce.number().min(0).max(20).optional().nullable(),
+  hydrationColorimetry: z.string().max(60).optional().nullable(),
+  macroBalanceNotes: z.string().max(1000).optional().nullable(),
+  junkFoodFrequency: z.string().max(200).optional().nullable(),
+  mealScheduleNotes: z.string().max(1000).optional().nullable(),
+  labResults: z.string().max(2000).optional().nullable(),
+  status: z.string().max(60).optional().nullable(),
+  observations: z.string().max(2000).optional().nullable(),
+  recommendations: z.string().max(2000).optional().nullable(),
+});
+export type CreateNutritionRecordDto = z.infer<typeof createNutritionRecordSchema>;
+
+// ---------------------------------------------------------------------------
+// Physical batteries & injuries
+// ---------------------------------------------------------------------------
+
+export const createPhysicalRecordSchema = z.object({
+  playerId: z.string().uuid(),
+  date: z.coerce.date(),
+  metrics: z.record(z.string(), z.union([z.string(), z.number()])),
+  observations: z.string().max(2000).optional().nullable(),
+});
+export type CreatePhysicalRecordDto = z.infer<typeof createPhysicalRecordSchema>;
+
+export const injuryStatusEnum = z.enum(["ACTIVE", "RECOVERING", "CLEARED"]);
+export const injurySeverityEnum = z.enum(["MILD", "MODERATE", "SEVERE"]);
+
+export const createInjurySchema = z.object({
+  playerId: z.string().uuid(),
+  description: z.string().min(1).max(300),
+  bodyPart: z.string().max(100).optional().nullable(),
+  date: z.coerce.date(),
+  severity: injurySeverityEnum.optional().nullable(),
+  expectedRecoveryDays: z.coerce.number().int().min(0).max(730).optional().nullable(),
+  actualReturnDate: z.coerce.date().optional().nullable(),
+  status: injuryStatusEnum.optional().default("ACTIVE"),
+  painLevel: z.coerce.number().int().min(0).max(10).optional().nullable(),
+  mobilityNotes: z.string().max(1000).optional().nullable(),
+});
+export type CreateInjuryDto = z.infer<typeof createInjurySchema>;
+
+export const updateInjurySchema = createInjurySchema.partial().omit({ playerId: true });
+export type UpdateInjuryDto = z.infer<typeof updateInjurySchema>;
+
+// ---------------------------------------------------------------------------
+// Player eligibility / document checklist
+// ---------------------------------------------------------------------------
+
+export const documentStatusEnum = z.enum(["PENDING", "SUBMITTED", "EXPIRED", "NOT_APPLICABLE"]);
+
+export const upsertPlayerDocumentSchema = z.object({
+  documentTypeId: z.string().uuid(),
+  status: documentStatusEnum,
+  submittedDate: z.coerce.date().optional().nullable(),
+  expiresDate: z.coerce.date().optional().nullable(),
+  notes: z.string().max(500).optional().nullable(),
+});
+export type UpsertPlayerDocumentDto = z.infer<typeof upsertPlayerDocumentSchema>;

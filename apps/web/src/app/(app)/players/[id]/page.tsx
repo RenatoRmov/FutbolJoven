@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { PERMISSIONS } from "@futboljoven/shared";
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -9,14 +10,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { Skeleton, EmptyState } from "@/components/ui/Skeleton";
 import { PlayerRadarChart, RadarPoint } from "@/components/charts/PlayerRadarChart";
 import { EvolutionLineChart, EvolutionSeries } from "@/components/charts/EvolutionLineChart";
+import { NutritionTab } from "@/components/player/NutritionTab";
+import { PhysicalHealthTab } from "@/components/player/PhysicalHealthTab";
+import { DocumentsTab } from "@/components/player/DocumentsTab";
 import { api } from "@/lib/api-client";
-import { calculateAge, Player, POSITION_LABELS, STATUS_LABELS, STATUS_TONE } from "@/lib/types";
+import { useAuth } from "@/lib/auth-context";
+import { calculateAge, ESTATUS_LABELS, ESTATUS_TONE, GENDER_LABELS, Player, POSITION_LABELS, STATUS_LABELS, STATUS_TONE } from "@/lib/types";
 
 interface EvolutionResponse {
   series: { dimensionKey: string; dimensionName: string; points: { date: string; value: number }[] }[];
   radar: { dimensionKey: string; dimensionName: string; value: number | null }[];
   previousRadar: { dimensionKey: string; dimensionName: string; value: number | null }[];
   teamAverageRadar: { dimensionKey: string; dimensionName: string; value: number | null }[];
+  notaFinal: number | null;
+  estatus: string | null;
 }
 
 interface EvaluationListItem {
@@ -31,6 +38,7 @@ interface EvaluationListItem {
 
 export default function PlayerProfilePage() {
   const params = useParams<{ id: string }>();
+  const { hasPermission } = useAuth();
   const [player, setPlayer] = useState<Player | null>(null);
   const [evolution, setEvolution] = useState<EvolutionResponse | null>(null);
   const [evaluations, setEvaluations] = useState<EvaluationListItem[] | null>(null);
@@ -104,15 +112,22 @@ export default function PlayerProfilePage() {
               {player.lastName[0]}
             </div>
             <div className="flex-1 space-y-1">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-semibold text-slate-50">
                   {player.firstName} {player.lastName}
                 </h2>
                 <Badge tone={STATUS_TONE[player.status] ?? "neutral"}>{STATUS_LABELS[player.status] ?? player.status}</Badge>
+                {evolution?.estatus && (
+                  <Badge tone={ESTATUS_TONE[evolution.estatus as keyof typeof ESTATUS_TONE] ?? "neutral"}>
+                    {ESTATUS_LABELS[evolution.estatus] ?? evolution.estatus}
+                    {evolution.notaFinal !== null && ` · Nota Final ${evolution.notaFinal}`}
+                  </Badge>
+                )}
               </div>
               <p className="text-sm text-slate-400">
                 {player.currentTeam?.category?.name ?? "Sin categoría"} · {player.primaryPosition ? POSITION_LABELS[player.primaryPosition] : "Sin posición"} ·{" "}
                 {calculateAge(player.birthDate)} años · Dorsal {player.jerseyNumber ?? "—"}
+                {player.gender && ` · ${GENDER_LABELS[player.gender] ?? player.gender}`}
               </p>
               <p className="text-xs text-slate-500">
                 En el club desde {new Date(player.joinDate).toLocaleDateString("es-AR")} · {player.city ?? ""} {player.nationality ? `(${player.nationality})` : ""}
@@ -127,6 +142,11 @@ export default function PlayerProfilePage() {
             <TabsTrigger value="evaluaciones">Evaluaciones</TabsTrigger>
             <TabsTrigger value="evolucion">Evolución</TabsTrigger>
             <TabsTrigger value="historial">Historial</TabsTrigger>
+            {hasPermission(PERMISSIONS.NUTRITION_VIEW) && <TabsTrigger value="nutricion">Nutrición</TabsTrigger>}
+            {hasPermission(PERMISSIONS.PHYSICAL_VIEW) && <TabsTrigger value="fisico">Físico y Salud</TabsTrigger>}
+            {hasPermission(PERMISSIONS.PLAYERS_DOCUMENTS_VIEW, PERMISSIONS.PLAYERS_DOCUMENTS_MANAGE) && (
+              <TabsTrigger value="documentacion">Documentación</TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="resumen" className="pt-5">
@@ -254,6 +274,24 @@ export default function PlayerProfilePage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {hasPermission(PERMISSIONS.NUTRITION_VIEW) && (
+            <TabsContent value="nutricion" className="pt-5">
+              <NutritionTab playerId={player.id} />
+            </TabsContent>
+          )}
+
+          {hasPermission(PERMISSIONS.PHYSICAL_VIEW) && (
+            <TabsContent value="fisico" className="pt-5">
+              <PhysicalHealthTab playerId={player.id} />
+            </TabsContent>
+          )}
+
+          {hasPermission(PERMISSIONS.PLAYERS_DOCUMENTS_VIEW, PERMISSIONS.PLAYERS_DOCUMENTS_MANAGE) && (
+            <TabsContent value="documentacion" className="pt-5">
+              <DocumentsTab playerId={player.id} />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </div>

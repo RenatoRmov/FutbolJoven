@@ -1,9 +1,15 @@
 import { Injectable } from "@nestjs/common";
-import { PERMISSIONS } from "@futboljoven/shared";
+import { computeNotaFinal, computeTalentStatus, PERMISSIONS, TALENT_STATUS_LABELS } from "@futboljoven/shared";
+import type { TalentStatus } from "@futboljoven/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import type { AuthenticatedUser } from "../auth/auth.types";
 
 const RECENT_DAYS = 30;
+
+interface PlayerNotaFinalPoint {
+  date: Date;
+  value: number;
+}
 
 @Injectable()
 export class DashboardService {
@@ -33,7 +39,67 @@ export class DashboardService {
     const evaluatedSet = new Set(evaluatedRecentPlayerIds.map((e) => e.playerId));
     const playersWithoutRecentEvaluation = allActivePlayerIds.filter((p) => !evaluatedSet.has(p.id)).length;
 
-    const trend = await this.computeEvolutionTrend();
+    const players = await this.prisma.player.findMany({
+      where: { status: "ACTIVE" },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        currentTeam: { select: { category: { select: { id: true, name: true, order: true } } } },
+      },
+    });
+
+    const stats = await this.computeNotaFinalStats(players.map((p) => p.id));
+
+    const categoryBuckets = new Map<string, { name: string; order: number; values: number[] }>();
+    const estatusCounts = new Map<TalentStatus, number>();
+    const improving: { playerId: string; name: string; delta: number; notaFinal: number }[] = [];
+    const declining: { playerId: string; name: string; delta: number; notaFinal: number }[] = [];
+    const trendBuckets = new Map<string, number[]>();
+
+    for (const player of players) {
+      const points = stats.pointsByPlayer.get(player.id) ?? [];
+      for (const p of points) {
+        const weekKey = weekStartISO(p.date);
+        const arr = trendBuckets.get(weekKey) ?? [];
+        arr.push(p.value);
+        trendBuckets.set(weekKey, arr);
+      }
+      if (points.length === 0) continue;
+
+      const latest = points[points.length - 1].value;
+      const category = player.currentTeam?.category;
+      if (category) {
+        const bucket = categoryBuckets.get(category.id) ?? { name: category.name, order: category.order, values: [] };
+        bucket.values.push(latest);
+        categoryBuckets.set(category.id, bucket);
+      }
+
+      const status = computeTalentStatus(latest);
+      if (status) estatusCounts.set(status, (estatusCounts.get(status) ?? 0) + 1);
+
+      if (points.length >= 2) {
+        const delta = Number((latest - points[0].value).toFixed(2));
+        const entry = { playerId: player.id, name: `${player.firstName} ${player.lastName}`, delta, notaFinal: latest };
+        if (delta >= 0.5) improving.push(entry);
+        else if (delta <= -0.5) declining.push(entry);
+      }
+    }
+
+    const notaFinalByCategory = Array.from(categoryBuckets.values())
+      .sort((a, b) => a.order - b.order)
+      .map((c) => ({ categoryName: c.name, avgNotaFinal: average(c.values), playerCount: c.values.length }));
+
+    const estatusDistribution = (Object.keys(TALENT_STATUS_LABELS) as TalentStatus[]).map((status) => ({
+      status,
+      label: TALENT_STATUS_LABELS[status],
+      count: estatusCounts.get(status) ?? 0,
+    }));
+
+    const notaFinalTrend = Array.from(trendBuckets.entries())
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .slice(-12)
+      .map(([week, values]) => ({ week, avgNotaFinal: average(values) }));
 
     return {
       scope: "global" as const,
@@ -44,9 +110,14 @@ export class DashboardService {
         evaluationsLast30Days: evaluationsRecent,
         evaluationsTotal,
         playersWithoutRecentEvaluation,
-        playersImproving: trend.improving,
-        playersDeclining: trend.declining,
+        playersImproving: improving.length,
+        playersDeclining: declining.length,
       },
+      notaFinalByCategory,
+      estatusDistribution,
+      notaFinalTrend,
+      topImproving: improving.sort((a, b) => b.delta - a.delta).slice(0, 5),
+      topDeclining: declining.sort((a, b) => a.delta - b.delta).slice(0, 5),
     };
   }
 
@@ -69,6 +140,20 @@ export class DashboardService {
     const evaluatedSet = new Set(evaluatedRecentPlayerIds.map((e) => e.playerId));
     const playersPending = players.filter((p) => !evaluatedSet.has(p.id));
 
+    const stats = await this.computeNotaFinalStats(players.map((p) => p.id));
+    const estatusCounts = new Map<TalentStatus, number>();
+    for (const player of players) {
+      const points = stats.pointsByPlayer.get(player.id) ?? [];
+      if (points.length === 0) continue;
+      const status = computeTalentStatus(points[points.length - 1].value);
+      if (status) estatusCounts.set(status, (estatusCounts.get(status) ?? 0) + 1);
+    }
+    const estatusDistribution = (Object.keys(TALENT_STATUS_LABELS) as TalentStatus[]).map((status) => ({
+      status,
+      label: TALENT_STATUS_LABELS[status],
+      count: estatusCounts.get(status) ?? 0,
+    }));
+
     return {
       scope: "assigned" as const,
       kpis: {
@@ -79,40 +164,59 @@ export class DashboardService {
       teams,
       playersPending,
       recentEvaluations,
+      estatusDistribution,
     };
   }
 
-  private async computeEvolutionTrend() {
+  /**
+   * Fetches every evaluation for the given players once, and computes the
+   * weighted Nota Final for each (using the dimension weights currently
+   * configured). Bounded to demo/mid-size datasets — for large clubs this
+   * should move to a scheduled aggregation job.
+   */
+  private async computeNotaFinalStats(playerIds: string[]) {
     const dimensions = await this.prisma.evaluationDimension.findMany({ where: { isActive: true } });
-    const players = await this.prisma.player.findMany({ where: { status: "ACTIVE" }, select: { id: true } });
+    const weightByDimension = new Map(dimensions.map((d) => [d.id, d.weight]));
 
-    let improving = 0;
-    let declining = 0;
+    const evaluations = await this.prisma.evaluation.findMany({
+      where: { playerId: { in: playerIds } },
+      select: { playerId: true, date: true, scores: { select: { dimensionId: true, value: true } } },
+      orderBy: { date: "asc" },
+    });
 
-    // Bounded to a reasonable demo/mid-size dataset; for large clubs this
-    // aggregation should move to a scheduled job / materialized view.
-    for (const player of players) {
-      const evaluations = await this.prisma.evaluation.findMany({
-        where: { playerId: player.id },
-        include: { scores: true },
-        orderBy: { date: "asc" },
-      });
-      if (evaluations.length < 2) continue;
-
-      const avgFor = (ev: (typeof evaluations)[number]) => {
-        if (ev.scores.length === 0) return null;
-        return ev.scores.reduce((sum, s) => sum + s.value, 0) / ev.scores.length;
-      };
-
-      const first = avgFor(evaluations[0]);
-      const last = avgFor(evaluations[evaluations.length - 1]);
-      if (first === null || last === null) continue;
-
-      const delta = last - first;
-      if (delta >= 0.5) improving += 1;
-      else if (delta <= -0.5) declining += 1;
+    const pointsByPlayer = new Map<string, PlayerNotaFinalPoint[]>();
+    for (const ev of evaluations) {
+      const byDimension = new Map<string, number[]>();
+      for (const s of ev.scores) {
+        const arr = byDimension.get(s.dimensionId) ?? [];
+        arr.push(s.value);
+        byDimension.set(s.dimensionId, arr);
+      }
+      const dimensionAverages = Array.from(byDimension.entries()).map(([dimensionId, values]) => ({
+        dimensionId,
+        weight: weightByDimension.get(dimensionId) ?? 0,
+        average: values.reduce((a, b) => a + b, 0) / values.length,
+      }));
+      const notaFinal = computeNotaFinal(dimensionAverages);
+      if (notaFinal === null) continue;
+      const arr = pointsByPlayer.get(ev.playerId) ?? [];
+      arr.push({ date: ev.date, value: notaFinal });
+      pointsByPlayer.set(ev.playerId, arr);
     }
 
-    return { improving, declining };
+    return { pointsByPlayer };
   }
+}
+
+function average(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return Number((values.reduce((a, b) => a + b, 0) / values.length).toFixed(2));
+}
+
+function weekStartISO(date: Date): string {
+  const d = new Date(date);
+  const day = d.getUTCDay();
+  const diff = (day + 6) % 7; // Monday as start of week
+  d.setUTCDate(d.getUTCDate() - diff);
+  return d.toISOString().slice(0, 10);
 }

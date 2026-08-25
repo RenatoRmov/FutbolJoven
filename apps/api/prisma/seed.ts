@@ -5,6 +5,7 @@ import { fakerES as faker } from "@faker-js/faker";
 import {
   ALL_PERMISSIONS,
   DEFAULT_DIMENSIONS,
+  DEFAULT_DOCUMENT_TYPES,
   DEFAULT_ROLE_PERMISSIONS,
   DEFAULT_SCALE,
   PERMISSIONS,
@@ -50,31 +51,46 @@ const PERMISSION_DESCRIPTIONS: Record<string, string> = {
   [PERMISSIONS.NUTRITION_MANAGE]: "Registrar información nutricional",
   [PERMISSIONS.PHYSICAL_VIEW]: "Ver información física",
   [PERMISSIONS.PHYSICAL_MANAGE]: "Registrar información física",
+  [PERMISSIONS.PLAYERS_DOCUMENTS_VIEW]: "Ver documentación/habilitación de jugadores",
+  [PERMISSIONS.PLAYERS_DOCUMENTS_MANAGE]: "Gestionar documentación/habilitación de jugadores",
   [PERMISSIONS.REPORTS_GENERATE]: "Generar informes",
   [PERMISSIONS.DATA_EXPORT]: "Exportar información a Excel",
   [PERMISSIONS.DATA_IMPORT]: "Importar información masivamente",
 };
 
+// Category structure mirrors a real formative-football club: men's pathway
+// Sub-13 to Proyección Sub-20, a women's category spanning a broader age
+// band, and Primer Equipo as the professional destination.
 const CATEGORY_DEFS = [
-  { name: "Sub-13", order: 1, minAge: 12, maxAge: 13 },
-  { name: "Sub-14", order: 2, minAge: 13, maxAge: 14 },
-  { name: "Sub-15", order: 3, minAge: 14, maxAge: 15 },
-  { name: "Sub-16", order: 4, minAge: 15, maxAge: 16 },
-  { name: "Sub-17", order: 5, minAge: 16, maxAge: 17 },
-  { name: "Sub-18", order: 6, minAge: 17, maxAge: 18 },
-  { name: "Proyección / Reserva", order: 7, minAge: 18, maxAge: 21 },
-  { name: "Primer Equipo", order: 8, minAge: 17, maxAge: 40 },
+  { name: "Sub-13", order: 1, minAge: 12, maxAge: 13, gender: "MALE" as const },
+  { name: "Sub-14", order: 2, minAge: 13, maxAge: 14, gender: "MALE" as const },
+  { name: "Sub-15", order: 3, minAge: 14, maxAge: 15, gender: "MALE" as const },
+  { name: "Sub-16", order: 4, minAge: 15, maxAge: 16, gender: "MALE" as const },
+  { name: "Sub-18", order: 5, minAge: 16, maxAge: 18, gender: "MALE" as const },
+  { name: "Proyección Sub-20", order: 6, minAge: 18, maxAge: 20, gender: "MALE" as const },
+  { name: "Femenina Juvenil", order: 7, minAge: 13, maxAge: 21, gender: "FEMALE" as const },
+  { name: "Primer Equipo", order: 8, minAge: 17, maxAge: 40, gender: "MALE" as const },
 ];
 
-const POSITIONS = [
-  "GOALKEEPER",
-  "CENTER_BACK",
-  "FULL_BACK",
-  "DEFENSIVE_MIDFIELDER",
-  "CENTRAL_MIDFIELDER",
-  "ATTACKING_MIDFIELDER",
-  "WINGER",
-  "STRIKER",
+// Weighted so goalkeepers stay rare, like a real squad (~1 in 12).
+const POSITION_POOL = [
+  "PORTERO",
+  "LATERAL_DERECHO",
+  "LATERAL_IZQUIERDO",
+  "LATERAL_IZQUIERDO",
+  "DEFENSA_CENTRAL",
+  "DEFENSA_CENTRAL",
+  "DEFENSA_CENTRAL",
+  "MEDIOCENTRO",
+  "MEDIOCENTRO",
+  "MEDIOCENTRO",
+  "VOLANTE",
+  "VOLANTE_OFENSIVO",
+  "VOLANTE_MIXTO",
+  "EXTREMO_DERECHO",
+  "EXTREMO_IZQUIERDO",
+  "DELANTERO_CENTRO",
+  "DELANTERO",
 ];
 
 function pick<T>(arr: T[]): T {
@@ -129,7 +145,7 @@ async function main() {
     }
   }
 
-  // --- Evaluation scale + dimensions + metrics ---
+  // --- Evaluation scale + dimensions + metrics (real weighted matrix) ---
   const scale = await prisma.evaluationScale.upsert({
     where: { key: DEFAULT_SCALE.key },
     update: { labels: JSON.stringify(DEFAULT_SCALE.labels) },
@@ -146,8 +162,8 @@ async function main() {
   for (const dim of DEFAULT_DIMENSIONS) {
     const dimension = await prisma.evaluationDimension.upsert({
       where: { key: dim.key },
-      update: { name: dim.name, order: dim.order, scaleId: scale.id },
-      create: { key: dim.key, name: dim.name, order: dim.order, scaleId: scale.id },
+      update: { name: dim.name, order: dim.order, weight: dim.weight, scaleId: scale.id },
+      create: { key: dim.key, name: dim.name, order: dim.order, weight: dim.weight, scaleId: scale.id },
     });
     dimensionByKey.set(dim.key, dimension);
 
@@ -159,6 +175,18 @@ async function main() {
     }
   }
   const dimensions = Array.from(dimensionByKey.values());
+
+  // --- Document types (real club eligibility checklist) ---
+  const documentTypeByKey = new Map<string, { id: string }>();
+  for (const doc of DEFAULT_DOCUMENT_TYPES) {
+    const documentType = await prisma.documentType.upsert({
+      where: { key: doc.key },
+      update: { name: doc.name, category: doc.category, isRequired: doc.isRequired, order: doc.order },
+      create: { key: doc.key, name: doc.name, category: doc.category, isRequired: doc.isRequired, order: doc.order },
+    });
+    documentTypeByKey.set(doc.key, documentType);
+  }
+  const ingresoDocTypes = DEFAULT_DOCUMENT_TYPES.filter((d) => d.category === "INGRESO").map((d) => documentTypeByKey.get(d.key)!);
 
   // --- Seasons ---
   const season2025 = await prisma.season.upsert({
@@ -192,9 +220,9 @@ async function main() {
     const category = await prisma.category.upsert({
       where: { name: def.name },
       update: { order: def.order, minAge: def.minAge, maxAge: def.maxAge },
-      create: def,
+      create: { name: def.name, order: def.order, minAge: def.minAge, maxAge: def.maxAge },
     });
-    categories.push(category);
+    categories.push({ ...category, gender: def.gender });
   }
 
   // --- Teams (one per category per season) ---
@@ -230,10 +258,11 @@ async function main() {
 
   const admin = await upsertUser("admin@futboljoven.demo", "Ana", "Administradora", "SUPER_ADMIN");
   await upsertUser("director@futboljoven.demo", "Diego", "Director", "DIRECTOR");
-  await upsertUser("coordinador@futboljoven.demo", "Carla", "Coordinadora", "COORDINATOR");
-  await upsertUser("nutricion@futboljoven.demo", "Nadia", "Nutricionista", "NUTRITIONIST");
-  await upsertUser("fisico@futboljoven.demo", "Franco", "Preparador", "PHYSICAL_TRAINER");
+  const coordinator = await upsertUser("coordinador@futboljoven.demo", "Carla", "Coordinadora", "COORDINATOR");
+  const nutritionist = await upsertUser("nutricion@futboljoven.demo", "Nadia", "Nutricionista", "NUTRITIONIST");
+  const physicalTrainer = await upsertUser("fisico@futboljoven.demo", "Franco", "Preparador", "PHYSICAL_TRAINER");
   await upsertUser("scout@futboljoven.demo", "Sofía", "Scout", "SCOUT");
+  void coordinator;
 
   const coachFirstNames = ["Martín", "Lucía", "Pablo", "Julieta", "Ricardo", "Valentina"];
   const coaches: { id: string }[] = [];
@@ -272,11 +301,12 @@ async function main() {
   const evaluationTypes = ["MATCH", "MATCH", "MATCH", "TRAINING", "PERIOD"];
   let totalPlayers = 0;
   let totalEvaluations = 0;
+  const createdPlayers: { id: string; birthDate: Date; joinDate: Date; status: string }[] = [];
 
   for (const category of categories) {
     const team2026 = teams2026.get(category.id)!;
     const team2025 = teams2025.get(category.id)!;
-    const previousCategory = categories.find((c) => c.order === category.order - 1);
+    const previousCategory = categories.find((c) => c.order === category.order - 1 && c.gender === category.gender);
     const team2025Previous = previousCategory ? teams2025.get(previousCategory.id) : undefined;
     const coach = coachByCategoryId.get(category.id)!;
 
@@ -290,22 +320,23 @@ async function main() {
         ? new Date("2025-02-15")
         : new Date(2025 + randomInt(0, 1), randomInt(0, 11), randomInt(1, 28));
 
-      const firstName = faker.person.firstName();
+      const firstName = category.gender === "FEMALE" ? faker.person.firstName("female") : faker.person.firstName("male");
       const lastName = `${faker.person.lastName()} ${faker.person.lastName()}`;
-      const status = Math.random() < 0.9 ? "ACTIVE" : pick(["INJURED", "INACTIVE"]);
+      const status = Math.random() < 0.88 ? "ACTIVE" : pick(["INJURED", "INACTIVE"]);
 
       const player = await prisma.player.create({
         data: {
           firstName,
           lastName,
           birthDate,
-          nationality: "Argentina",
-          country: "Argentina",
-          city: pick(["Buenos Aires", "Córdoba", "Rosario", "Mendoza", "La Plata"]),
+          gender: category.gender,
+          nationality: "Chile",
+          country: "Chile",
+          city: pick(["Limache", "Olmué", "Quillota", "Valparaíso", "Villa Alemana"]),
           joinDate,
           currentTeamId: team2026.id,
           jerseyNumber: randomInt(1, 35),
-          primaryPosition: pick(POSITIONS),
+          primaryPosition: pick(POSITION_POOL),
           dominantFoot: Math.random() < 0.75 ? "RIGHT" : Math.random() < 0.5 ? "LEFT" : "BOTH",
           height: Math.round((150 + (age - 12) * 6 + randomInt(-5, 5)) * 10) / 10,
           weight: Math.round((45 + (age - 12) * 4 + randomInt(-4, 4)) * 10) / 10,
@@ -315,6 +346,7 @@ async function main() {
         },
       });
       totalPlayers++;
+      createdPlayers.push({ id: player.id, birthDate, joinDate, status });
 
       if (cameFromLowerCategory && team2025Previous) {
         await prisma.playerTeamHistory.create({
@@ -335,8 +367,8 @@ async function main() {
       }
 
       // Evaluation history: a handful of sessions over the last months with
-      // a gentle overall upward trend + noise, so evolution charts have
-      // something real to show.
+      // a gentle overall upward trend + noise, so evolution charts (and the
+      // weighted Nota Final / Estatus) have something real to show.
       const evaluationCount = randomInt(4, 8);
       const baseline: Record<string, number> = {};
       for (const dim of dimensions) baseline[dim.id] = randomInt(4, 7);
@@ -374,7 +406,97 @@ async function main() {
     }
   }
 
-  console.log(`Seed complete: ${totalPlayers} players, ${totalEvaluations} evaluations.`);
+  // --- Nutrition: two records per player (baseline + follow-up) ---
+  const hydrationLevels = ["Claro", "Amarillo claro", "Amarillo oscuro"];
+  const junkFoodLevels = ["Baja", "Moderada", "Alta"];
+  let nutritionCount = 0;
+  for (const p of createdPlayers) {
+    const age = 2026 - p.birthDate.getFullYear();
+    const baseWeight = 45 + Math.max(age - 12, 0) * 4;
+    for (const monthsAgo of [4, 1]) {
+      const date = new Date(new Date("2026-08-08").getTime() - monthsAgo * 30 * 86_400_000);
+      const weight = Math.round((baseWeight + randomInt(-3, 3) + (4 - monthsAgo) * 0.4) * 10) / 10;
+      await prisma.nutritionRecord.create({
+        data: {
+          playerId: p.id,
+          recordedById: nutritionist.id,
+          date,
+          weight,
+          height: Math.round((150 + Math.max(age - 12, 0) * 6) * 10) / 10,
+          bodyFatPercent: Math.round(randomInt(10, 18) * 10) / 10,
+          muscleMassPercent: Math.round(randomInt(35, 46) * 10) / 10,
+          mealsPerDay: randomInt(4, 6),
+          dailyWaterLiters: Math.round((1.5 + Math.random() * 1.5) * 10) / 10,
+          postTrainingWeightLossPct: Math.round(Math.random() * 15) / 10,
+          hydrationColorimetry: pick(hydrationLevels),
+          macroBalanceNotes: "Balance adecuado entre proteínas, carbohidratos y grasas para la etapa formativa.",
+          junkFoodFrequency: pick(junkFoodLevels),
+          mealScheduleNotes: "Respeta los horarios de comida principales; colación post-entrenamiento dentro de los 30 minutos.",
+          labResults: monthsAgo === 4 ? JSON.stringify({ hierro: `${randomInt(60, 160)} µg/dL`, ferritina: `${randomInt(20, 120)} ng/mL` }) : null,
+          status: "Adecuado",
+          observations: "Seguimiento nutricional de rutina, sin observaciones relevantes.",
+          isDemo: true,
+        },
+      });
+      nutritionCount++;
+    }
+  }
+
+  // --- Physical / injuries ---
+  const injuryDescriptions = [
+    { description: "Esguince de tobillo", bodyPart: "Tobillo" },
+    { description: "Distensión muscular isquiotibial", bodyPart: "Isquiotibiales" },
+    { description: "Sobrecarga en cuádriceps", bodyPart: "Cuádriceps" },
+    { description: "Contusión en rodilla", bodyPart: "Rodilla" },
+    { description: "Molestia en pubis", bodyPart: "Pubis" },
+  ];
+  let injuryCount = 0;
+  const injuredPlayers = createdPlayers.filter((p) => p.status === "INJURED");
+  const extraForDemo = createdPlayers.filter((p) => p.status === "ACTIVE").slice(0, 10);
+  for (const p of [...injuredPlayers, ...extraForDemo]) {
+    const detail = pick(injuryDescriptions);
+    const isActiveInjury = p.status === "INJURED";
+    const daysAgo = isActiveInjury ? randomInt(3, 20) : randomInt(30, 150);
+    const date = new Date(new Date("2026-08-08").getTime() - daysAgo * 86_400_000);
+    const severity = pick(["MILD", "MODERATE", "SEVERE"]);
+    const expectedRecoveryDays = severity === "MILD" ? randomInt(5, 10) : severity === "MODERATE" ? randomInt(10, 25) : randomInt(25, 60);
+
+    await prisma.injury.create({
+      data: {
+        playerId: p.id,
+        recordedById: physicalTrainer.id,
+        description: detail.description,
+        bodyPart: detail.bodyPart,
+        date,
+        severity,
+        expectedRecoveryDays,
+        actualReturnDate: isActiveInjury ? null : new Date(date.getTime() + expectedRecoveryDays * 86_400_000),
+        status: isActiveInjury ? pick(["ACTIVE", "RECOVERING"]) : "CLEARED",
+        painLevel: isActiveInjury ? randomInt(3, 7) : 0,
+        mobilityNotes: "Kinesiólogo realiza seguimiento de movilidad y carga progresiva según protocolo del club.",
+      },
+    });
+    injuryCount++;
+  }
+
+  // --- Player documents (ingreso checklist) ---
+  let documentCount = 0;
+  for (const p of createdPlayers) {
+    for (const docType of ingresoDocTypes) {
+      const submitted = Math.random() < 0.85;
+      await prisma.playerDocument.create({
+        data: {
+          playerId: p.id,
+          documentTypeId: docType.id,
+          status: submitted ? "SUBMITTED" : "PENDING",
+          submittedDate: submitted ? p.joinDate : null,
+        },
+      });
+      documentCount++;
+    }
+  }
+
+  console.log(`Seed complete: ${totalPlayers} players, ${totalEvaluations} evaluations, ${nutritionCount} nutrition records, ${injuryCount} injuries, ${documentCount} document entries.`);
   console.log("Demo login: admin@futboljoven.demo / " + DEMO_PASSWORD);
   void admin;
 }

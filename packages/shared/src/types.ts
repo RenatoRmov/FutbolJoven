@@ -16,25 +16,45 @@ export const DOMINANT_FOOT_LABELS: Record<DominantFoot, string> = {
   BOTH: "Ambidiestro",
 };
 
+export type PlayerGender = "MALE" | "FEMALE";
+
+export const PLAYER_GENDER_LABELS: Record<PlayerGender, string> = {
+  MALE: "Masculino",
+  FEMALE: "Femenino",
+};
+
+/**
+ * Real position taxonomy used by the club's own roster/evaluation
+ * spreadsheets (Spanish, position-specific rather than a generic
+ * English set).
+ */
 export type PlayerPosition =
-  | "GOALKEEPER"
-  | "CENTER_BACK"
-  | "FULL_BACK"
-  | "DEFENSIVE_MIDFIELDER"
-  | "CENTRAL_MIDFIELDER"
-  | "ATTACKING_MIDFIELDER"
-  | "WINGER"
-  | "STRIKER";
+  | "PORTERO"
+  | "LATERAL_DERECHO"
+  | "LATERAL_IZQUIERDO"
+  | "DEFENSA_CENTRAL"
+  | "MEDIOCENTRO"
+  | "VOLANTE"
+  | "VOLANTE_OFENSIVO"
+  | "VOLANTE_MIXTO"
+  | "EXTREMO_DERECHO"
+  | "EXTREMO_IZQUIERDO"
+  | "DELANTERO_CENTRO"
+  | "DELANTERO";
 
 export const PLAYER_POSITION_LABELS: Record<PlayerPosition, string> = {
-  GOALKEEPER: "Arquero",
-  CENTER_BACK: "Defensor central",
-  FULL_BACK: "Lateral",
-  DEFENSIVE_MIDFIELDER: "Volante defensivo",
-  CENTRAL_MIDFIELDER: "Volante central",
-  ATTACKING_MIDFIELDER: "Volante ofensivo",
-  WINGER: "Extremo",
-  STRIKER: "Delantero",
+  PORTERO: "Portero",
+  LATERAL_DERECHO: "Lateral derecho",
+  LATERAL_IZQUIERDO: "Lateral izquierdo",
+  DEFENSA_CENTRAL: "Defensa central",
+  MEDIOCENTRO: "Mediocentro",
+  VOLANTE: "Volante",
+  VOLANTE_OFENSIVO: "Volante ofensivo",
+  VOLANTE_MIXTO: "Volante mixto",
+  EXTREMO_DERECHO: "Extremo derecho",
+  EXTREMO_IZQUIERDO: "Extremo izquierdo",
+  DELANTERO_CENTRO: "Delantero centro",
+  DELANTERO: "Delantero",
 };
 
 export type UserStatus = "ACTIVE" | "DISABLED";

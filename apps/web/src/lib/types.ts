@@ -1,4 +1,5 @@
-import type { PlayerPosition } from "@futboljoven/shared";
+import type { PlayerPosition, TalentStatus } from "@futboljoven/shared";
+import { PLAYER_GENDER_LABELS, PLAYER_POSITION_LABELS, TALENT_STATUS_LABELS } from "@futboljoven/shared";
 
 export interface Category {
   id: string;
@@ -33,6 +34,7 @@ export interface Player {
   lastName: string;
   sportName: string | null;
   birthDate: string;
+  gender: string | null;
   nationality: string | null;
   country: string | null;
   city: string | null;
@@ -83,13 +85,15 @@ export const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neu
   LEFT_CLUB: "neutral",
 };
 
-export const POSITION_LABELS: Record<string, string> = {
-  GOALKEEPER: "Arquero",
-  CENTER_BACK: "Defensor central",
-  FULL_BACK: "Lateral",
-  DEFENSIVE_MIDFIELDER: "Volante defensivo",
-  CENTRAL_MIDFIELDER: "Volante central",
-  ATTACKING_MIDFIELDER: "Volante ofensivo",
-  WINGER: "Extremo",
-  STRIKER: "Delantero",
+export const POSITION_LABELS: Record<string, string> = PLAYER_POSITION_LABELS;
+export const GENDER_LABELS: Record<string, string> = PLAYER_GENDER_LABELS;
+
+export const ESTATUS_LABELS: Record<string, string> = TALENT_STATUS_LABELS;
+
+export const ESTATUS_TONE: Record<TalentStatus, "success" | "info" | "warning" | "danger" | "neutral"> = {
+  PROYECTADO: "success",
+  PROYECTABLE: "info",
+  EN_DESARROLLO: "warning",
+  LIMITADO: "warning",
+  NO_APTO: "danger",
 };
