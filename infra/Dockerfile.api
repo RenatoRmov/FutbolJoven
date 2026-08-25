@@ -21,7 +21,9 @@ ENV NODE_ENV=production
 COPY --from=build /app /app
 WORKDIR /app/apps/api
 EXPOSE 3001
-# Pushes the current schema to the DB on boot (fresh/empty production DB —
-# see prisma/schema.production.prisma for why `db push` instead of
-# `migrate deploy` at this stage) then starts the compiled server.
-CMD ["sh", "-c", "npx prisma db push --schema=prisma/schema.production.prisma --skip-generate --accept-data-loss && node dist/main.js"]
+# On every boot: push the current schema (fresh/empty production DB — see
+# prisma/schema.production.prisma for why `db push` instead of
+# `migrate deploy` at this stage), run the idempotent production bootstrap
+# (roles/permissions/categories/teams/staff users — never demo players,
+# see prisma/bootstrap.ts), then start the compiled server.
+CMD ["sh", "-c", "npx prisma db push --schema=prisma/schema.production.prisma --skip-generate --accept-data-loss && npx ts-node prisma/bootstrap.ts && node dist/main.js"]
