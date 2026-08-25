@@ -2,7 +2,9 @@
 
 Plataforma profesional de gestión, seguimiento y desarrollo de jugadores de fútbol formativo. Permite registrar jugadores, categorías y temporadas; evaluar periódicamente a cada jugador con dimensiones configurables (técnica, táctica, física, mental, resiliencia, social); visualizar su evolución histórica con gráficos radar y de línea de tiempo; y controlar el acceso a la información mediante roles y permisos aplicados tanto en frontend como en backend.
 
-Este repositorio contiene dos fases: el **MVP** (auth/RBAC, temporadas/categorías/equipos, jugadores, evaluaciones, dashboard, auditoría) y una **Fase 2** que reemplaza varias suposiciones genéricas por el **modelo real de un club de fútbol formativo** (matriz de evaluación ponderada, clasificación de talento, nutrición, médico/lesiones y documentación de habilitación de jugadores) — ver "Fase 2: el modelo real del club" más abajo. Informes PDF, import/export de Excel, analítica avanzada, notificaciones y la app móvil quedan con su modelo de datos ya diseñado (ver `apps/api/prisma/schema.prisma`) pero sin UI/lógica todavía — son la fase siguiente del roadmap (más abajo).
+Este repositorio contiene dos fases: el **MVP** (auth/RBAC, temporadas/categorías/equipos, jugadores, evaluaciones, dashboard, auditoría) y una **Fase 2** que reemplaza varias suposiciones genéricas por el **modelo real de un club de fútbol formativo** (matriz de evaluación ponderada, clasificación de talento, nutrición, médico/lesiones, documentación de habilitación de jugadores, e import/export de Excel — ver "Fase 2: el modelo real del club" más abajo). Informes PDF, analítica avanzada, notificaciones y la app móvil quedan con su modelo de datos ya diseñado (ver `apps/api/prisma/schema.prisma`) pero sin UI/lógica todavía — son la fase siguiente del roadmap (más abajo).
+
+**En producción:** [futboljoven.vercel.app](https://futboljoven.vercel.app) (frontend, Vercel) · API en Railway con PostgreSQL — 194 jugadores reales cargados, sin datos demo. Login: `admin@futboljoven.demo` / `Demo1234!` (cambiar antes de entregarle el sistema al club).
 
 ## Stack y decisiones de arquitectura
 
@@ -158,34 +160,36 @@ Se eligió esta combinación en vez de "todo en Vercel" porque Vercel corre func
 
 ### Backend en Railway
 
-1. [railway.app](https://railway.app) → "Login with GitHub" (misma cuenta que ya usás en GitHub).
-2. "New Project" → "Deploy from GitHub repo" → elegí `RenatoRmov/FutbolJoven`.
-3. En la configuración del servicio: **Dockerfile Path** = `infra/Dockerfile.api`, **Root Directory** = `.` (raíz del repo).
-4. "New" → "Database" → "Add PostgreSQL" dentro del mismo proyecto — Railway conecta automáticamente `DATABASE_URL` al servicio si los agregás al mismo proyecto (o copiá la URL manualmente a la variable de abajo).
-5. Variables de entorno del servicio backend:
+1. [railway.app](https://railway.app) → "Login with GitHub" (misma cuenta que ya usás en GitHub) — la primera vez que conectás un repo privado, Railway pide autorizar su GitHub App; si el botón de "Configure GitHub App" no aparece en el flujo normal, hacelo desde el propio dashboard de Railway ("+ New" → "GitHub Repo"), no desde `github.com/settings/installations` directamente.
+2. Dentro del proyecto: el servicio que apunta al repo → **Settings → Build**: `Builder` = **Dockerfile**, `Dockerfile Path` = `infra/Dockerfile.api`. **Settings → Deploy**: dejá `Custom Start Command` **vacío** (si Railway auto-detectó el monorepo antes de que existiera el Dockerfile, puede haber quedado un start command tipo `pnpm run start` pisando el `CMD` de la imagen).
+3. "New" → "Database" → "Add PostgreSQL" dentro del mismo proyecto.
+4. Variables de entorno del servicio backend:
    ```
-   DATABASE_URL=<la que genera el plugin de Postgres de Railway>
+   DATABASE_URL=${{Postgres.DATABASE_URL}}
    JWT_ACCESS_SECRET=<string aleatorio largo, distinto del de dev>
    JWT_REFRESH_SECRET=<otro string aleatorio largo>
    JWT_ACCESS_TTL=15m
    JWT_REFRESH_TTL=7d
-   WEB_ORIGIN=https://<tu-dominio-de-vercel>.vercel.app
+   WEB_ORIGIN=https://<tu-dominio-de-vercel>.vercel.app   # tiene que ser EXACTO — CORS falla en silencio si no coincide
    NODE_ENV=production
    ```
-6. Deploy. El contenedor corre `prisma db push` contra la Postgres de Railway al arrancar (crea el schema en una base vacía) y después levanta el servidor. Railway te da una URL pública tipo `https://futboljoven-api-production.up.railway.app`.
-7. Para recargar los 194 jugadores reales en esta base nueva: entrá a `/import-export` en el frontend ya deployado (una vez conectado a esta API) y subí de nuevo el Excel con el plantel — es la misma vía que se usó la primera vez, no hace falta un script aparte.
+5. Deploy. El contenedor corre `prisma db push` (crea el schema en la Postgres vacía), después `prisma/bootstrap.ts` (roles/permisos/categorías/temporadas/equipos/usuarios de staff — sin jugadores) y recién ahí levanta el servidor. Generá el dominio público desde **Settings → Networking → Generate Domain**.
+6. Para cargar el plantel real en esta base nueva: entrá a `/import-export` en el frontend ya deployado (apuntando a esta API) con el usuario admin y subí el Excel del plantel — es la misma vía que se usó la primera vez, no hace falta ningún script aparte.
 
 ### Frontend en Vercel
 
-Ya preparado con `apps/web/vercel.json` (build/install commands para el monorepo pnpm). Desde `apps/web`:
+`vercel.json` vive en la **raíz del repo** (no en `apps/web`) — Vercel tiene que subir el monorepo completo, no solo la subcarpeta, para poder construir `packages/shared` primero. Desde la raíz:
 
 ```bash
-vercel link      # conecta la carpeta a un proyecto de Vercel (crea uno nuevo si no existe)
-vercel env add NEXT_PUBLIC_API_URL production   # pegá la URL de Railway del paso anterior
+vercel link --project futboljoven   # conecta la carpeta a un proyecto de Vercel (crea uno nuevo si no existe; el nombre debe ir en minúsculas)
+vercel env add NEXT_PUBLIC_API_URL production   # pegá la URL pública de Railway del paso anterior
 vercel --prod
 ```
 
-O por el dashboard de Vercel: "Add New Project" → importar `RenatoRmov/FutbolJoven` → **Root Directory** = `apps/web` → variable de entorno `NEXT_PUBLIC_API_URL` = URL de Railway → Deploy.
+Notas:
+- El preflight de detección de framework de Vercel revisa el `package.json` del directorio que se sube (la raíz), no el de `apps/web` — por eso el `package.json` raíz tiene `"next"` como devDependency aunque no se use ahí directamente.
+- Si el deploy queda protegido por un login de Vercel (redirect a `vercel.com/sso-api`) incluso en el dominio de producción: **Project Settings → Deployment Protection** y desactivá "Vercel Authentication" — no hace falta para una app que ya tiene su propio login.
+- `NEXT_PUBLIC_API_URL` se hornea en el build — cambiarla requiere un redeploy (`vercel --prod`), no alcanza con solo actualizar la variable.
 
 ## Roadmap (fases siguientes)
 
