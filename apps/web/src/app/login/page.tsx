@@ -28,14 +28,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_#101c29,_#050b12)] px-4">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[#EDE7E4] to-[#E4DCD8] px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-lg bg-accent-500 text-lg font-bold text-pitch-950">
-            FJ
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-rojo to-rojo-noche text-base font-bold text-white shadow-club">
+            CDL
           </div>
-          <h1 className="text-xl font-semibold text-slate-50">FutbolJoven</h1>
-          <p className="mt-1 text-sm text-slate-400">Plataforma de gestión y desarrollo del fútbol formativo</p>
+          <h1 className="font-display text-2xl tracking-wide text-rojo">Deportes Limache</h1>
+          <p className="mt-1 text-sm text-gris">Plataforma de gestión y desarrollo del fútbol formativo</p>
         </div>
 
         <Card>
@@ -49,7 +49,7 @@ export default function LoginPage() {
                 <Label htmlFor="password">Contraseña</Label>
                 <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
-              {error && <p className="text-xs text-red-400">{error}</p>}
+              {error && <p className="text-xs font-medium text-rojo-oscuro">{error}</p>}
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Ingresando..." : "Ingresar"}
               </Button>
@@ -57,8 +57,8 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        <div className="mt-5 rounded-lg border border-pitch-700 bg-pitch-900/40 p-3 text-xs text-slate-400">
-          <p className="mb-1.5 font-medium text-slate-300">Usuarios demo (contraseña: Demo1234!)</p>
+        <div className="mt-5 rounded-lg border border-borde bg-white p-3 text-xs text-gris">
+          <p className="mb-1.5 font-medium text-gris">Usuarios demo (contraseña: Demo1234!)</p>
           <ul className="space-y-0.5">
             <li>admin@futboljoven.demo — Super Admin</li>
             <li>director@futboljoven.demo — Director Deportivo</li>

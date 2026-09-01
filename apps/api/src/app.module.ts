@@ -14,6 +14,9 @@ import { NutritionModule } from "./nutrition/nutrition.module";
 import { PhysicalModule } from "./physical/physical.module";
 import { PlayerDocumentsModule } from "./player-documents/player-documents.module";
 import { ImportExportModule } from "./import-export/import-export.module";
+import { FixturesModule } from "./fixtures/fixtures.module";
+import { FinanceModule } from "./finance/finance.module";
+import { ReportsModule } from "./reports/reports.module";
 
 @Module({
   imports: [
@@ -32,6 +35,9 @@ import { ImportExportModule } from "./import-export/import-export.module";
     PhysicalModule,
     PlayerDocumentsModule,
     ImportExportModule,
+    FixturesModule,
+    FinanceModule,
+    ReportsModule,
   ],
 })
 export class AppModule {}

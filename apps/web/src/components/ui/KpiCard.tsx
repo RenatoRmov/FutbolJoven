@@ -13,18 +13,18 @@ export function KpiCard({
   hint?: string;
 }) {
   const toneClasses = {
-    neutral: "text-slate-50",
-    success: "text-emerald-400",
-    danger: "text-red-400",
-    warning: "text-amber-400",
+    neutral: "text-rojo",
+    success: "text-[#1E7A3E]",
+    danger: "text-rojo-oscuro",
+    warning: "text-[#9A6B00]",
   } as const;
 
   return (
     <Card>
-      <CardContent className="py-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-        <p className={cn("mt-1.5 text-2xl font-semibold", toneClasses[tone])}>{value}</p>
-        {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+      <CardContent className="py-4 text-center">
+        <p className={cn("font-display text-3xl tracking-wide", toneClasses[tone])}>{value}</p>
+        <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-gris">{label}</p>
+        {hint && <p className="mt-1 text-xs text-gris">{hint}</p>}
       </CardContent>
     </Card>
   );

@@ -37,6 +37,13 @@ export const PERMISSIONS = {
   PLAYERS_DOCUMENTS_VIEW: "players.documents.view",
   PLAYERS_DOCUMENTS_MANAGE: "players.documents.manage",
 
+  FIXTURES_VIEW_ALL: "fixtures.view.all",
+  FIXTURES_VIEW_ASSIGNED: "fixtures.view.assigned",
+  FIXTURES_MANAGE_ALL: "fixtures.manage.all",
+  FIXTURES_MANAGE_ASSIGNED: "fixtures.manage.assigned",
+  FINANCE_VIEW: "finance.view",
+  FINANCE_MANAGE: "finance.manage",
+
   // Reserved for future phases — permissions already exist so RBAC checks
   // can be wired without a schema change when the modules are built.
   REPORTS_GENERATE: "reports.generate",
@@ -76,6 +83,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = 
     P.REPORTS_GENERATE,
     P.DATA_EXPORT,
     P.PLAYERS_DOCUMENTS_VIEW,
+    P.FIXTURES_VIEW_ALL,
+    P.FINANCE_VIEW,
   ],
   COORDINATOR: [
     P.PLAYERS_VIEW_ALL,
@@ -88,6 +97,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = 
     P.PLAYERS_DOCUMENTS_MANAGE,
     P.DATA_IMPORT,
     P.DATA_EXPORT,
+    P.FIXTURES_VIEW_ALL,
+    P.FIXTURES_MANAGE_ALL,
+    P.FINANCE_VIEW,
+    P.FINANCE_MANAGE,
   ],
   COACH: [
     P.PLAYERS_VIEW_ASSIGNED,
@@ -95,6 +108,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = 
     P.EVALUATIONS_VIEW_ASSIGNED,
     P.EVALUATIONS_CREATE_ASSIGNED,
     P.DASHBOARD_VIEW_ASSIGNED,
+    P.FIXTURES_VIEW_ASSIGNED,
+    P.FIXTURES_MANAGE_ASSIGNED,
   ],
   NUTRITIONIST: [
     P.PLAYERS_VIEW_ALL,

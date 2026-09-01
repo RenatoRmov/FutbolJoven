@@ -6,21 +6,26 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        pitch: {
-          950: "#050b12",
-          900: "#0a121c",
-          800: "#101c29",
-          700: "#182636",
-          600: "#223549",
-          500: "#324a63",
+        rojo: {
+          DEFAULT: "#C8102E",
+          oscuro: "#8C0E22",
+          noche: "#4A0812",
         },
-        accent: {
-          500: "#22c55e",
-          600: "#16a34a",
+        carbon: "#1A1A1A",
+        gris: {
+          DEFAULT: "#6E6660",
+          claro: "#F1ECE9",
         },
+        crema: "#FAF7F5",
+        borde: "#E6DEDA",
+        dorado: "#F0B429",
       },
       fontFamily: {
-        sans: ["-apple-system", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
+        display: ["var(--font-bebas-neue)", "Impact", "sans-serif"],
+        sans: ["var(--font-inter)", "-apple-system", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
+      },
+      boxShadow: {
+        club: "0 8px 24px rgba(74,8,18,0.14)",
       },
     },
   },

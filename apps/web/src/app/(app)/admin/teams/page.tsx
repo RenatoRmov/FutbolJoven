@@ -84,7 +84,7 @@ export default function TeamsAdminPage() {
                 Crear
               </Button>
             </form>
-            {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+            {error && <p className="mt-2 text-sm text-rojo-oscuro">{error}</p>}
           </CardContent>
         </Card>
 
@@ -100,7 +100,7 @@ export default function TeamsAdminPage() {
           <Tbody>
             {teams.map((t) => (
               <Tr key={t.id}>
-                <Td className="font-medium text-slate-100">{t.name}</Td>
+                <Td className="font-medium text-carbon">{t.name}</Td>
                 <Td>{t.category?.name}</Td>
                 <Td>{t.season?.name}</Td>
                 <Td>{t._count?.players ?? 0}</Td>

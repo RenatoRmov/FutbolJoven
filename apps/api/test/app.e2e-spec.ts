@@ -68,6 +68,8 @@ describe("FutbolJoven API (e2e)", () => {
       PERMISSIONS.EVALUATIONS_VIEW_ASSIGNED,
       PERMISSIONS.EVALUATIONS_CREATE_ASSIGNED,
       PERMISSIONS.DASHBOARD_VIEW_ASSIGNED,
+      PERMISSIONS.FIXTURES_VIEW_ASSIGNED,
+      PERMISSIONS.FIXTURES_MANAGE_ASSIGNED,
     ];
     const coachRole = await prisma.role.create({
       data: {
@@ -407,6 +409,105 @@ describe("FutbolJoven API (e2e)", () => {
       const res = await request(app.getHttpServer()).get("/api/export/players").set("Cookie", adminCookie);
       expect(res.status).toBe(200);
       expect(res.headers["content-type"]).toContain("spreadsheetml");
+    });
+  });
+
+  describe("Fixtures scoping", () => {
+    it("lets a coach create a match for their own team", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/api/fixtures")
+        .set("Cookie", coachCookie)
+        .send({ teamId: teamAId, opponent: "Rival FC", date: "2026-10-01" });
+      expect(res.status).toBe(201);
+      expect(res.body.teamId).toBe(teamAId);
+    });
+
+    it("blocks a coach from creating a match for a team they aren't assigned to", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/api/fixtures")
+        .set("Cookie", coachCookie)
+        .send({ teamId: teamBId, opponent: "Rival FC", date: "2026-10-01" });
+      expect(res.status).toBe(403);
+    });
+
+    it("lets an admin create a match for any team", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/api/fixtures")
+        .set("Cookie", adminCookie)
+        .send({ teamId: teamBId, opponent: "Rival FC", date: "2026-10-01" });
+      expect(res.status).toBe(201);
+    });
+
+    it("records a match result with per-player appearances", async () => {
+      const createRes = await request(app.getHttpServer())
+        .post("/api/fixtures")
+        .set("Cookie", coachCookie)
+        .send({ teamId: teamAId, opponent: "Otro Rival", date: "2026-10-08" });
+      const matchId = createRes.body.id;
+
+      const resultRes = await request(app.getHttpServer())
+        .post(`/api/fixtures/${matchId}/result`)
+        .set("Cookie", coachCookie)
+        .send({ teamScore: 2, opponentScore: 1, appearances: [{ playerId: playerAId, started: true, minutesPlayed: 90, goals: 1, yellowCards: 1 }] });
+      expect(resultRes.status).toBe(201);
+      expect(resultRes.body.status).toBe("PLAYED");
+
+      const appearancesRes = await request(app.getHttpServer())
+        .get(`/api/fixtures/player/${playerAId}/appearances`)
+        .set("Cookie", coachCookie);
+      expect(appearancesRes.status).toBe(200);
+      expect(appearancesRes.body.some((a: any) => a.matchId === matchId)).toBe(true);
+    });
+  });
+
+  describe("Finance permission gating", () => {
+    it("blocks a coach (no finance permission) from viewing finance", async () => {
+      const res = await request(app.getHttpServer()).get("/api/finance").set("Cookie", coachCookie);
+      expect(res.status).toBe(403);
+    });
+
+    it("blocks a coach from creating a financial entry", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/api/finance")
+        .set("Cookie", coachCookie)
+        .send({ date: "2026-10-01", type: "EXPENSE", category: "Arriendo cancha", amount: 50000 });
+      expect(res.status).toBe(403);
+    });
+
+    it("lets an admin create and list a financial entry", async () => {
+      const createRes = await request(app.getHttpServer())
+        .post("/api/finance")
+        .set("Cookie", adminCookie)
+        .send({ date: "2026-10-01", type: "INCOME", category: "Cuotas de socios", amount: 100000 });
+      expect(createRes.status).toBe(201);
+
+      const listRes = await request(app.getHttpServer()).get("/api/finance").set("Cookie", adminCookie);
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.length).toBeGreaterThan(0);
+
+      const summaryRes = await request(app.getHttpServer()).get("/api/finance/summary").set("Cookie", adminCookie);
+      expect(summaryRes.status).toBe(200);
+      expect(summaryRes.body.totalIncome).toBeGreaterThanOrEqual(100000);
+    });
+  });
+
+  describe("Reports (PDF)", () => {
+    it("generates a player PDF report", async () => {
+      const res = await request(app.getHttpServer()).get(`/api/reports/players/${playerAId}/pdf`).set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toBe("application/pdf");
+      expect(Buffer.isBuffer(res.body) || res.body instanceof Uint8Array).toBe(true);
+    });
+
+    it("generates a team PDF report", async () => {
+      const res = await request(app.getHttpServer()).get(`/api/reports/teams/${teamAId}/pdf`).set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toBe("application/pdf");
+    });
+
+    it("blocks a coach from exporting a report for a team they aren't assigned to", async () => {
+      const res = await request(app.getHttpServer()).get(`/api/reports/teams/${teamBId}/pdf`).set("Cookie", coachCookie);
+      expect(res.status).toBe(403);
     });
   });
 });

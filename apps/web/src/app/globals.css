@@ -3,15 +3,15 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
-  @apply bg-pitch-950 text-slate-100 antialiased;
+  @apply bg-gradient-to-b from-[#EDE7E4] to-[#E4DCD8] text-carbon antialiased font-sans;
 }
 
 ::selection {
-  @apply bg-accent-500/30;
+  @apply bg-rojo/20;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -19,7 +19,7 @@ body {
   height: 8px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  @apply bg-pitch-600 rounded-full;
+  @apply bg-borde rounded-full;
 }
 .scrollbar-thin::-webkit-scrollbar-track {
   @apply bg-transparent;

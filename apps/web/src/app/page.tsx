@@ -14,7 +14,7 @@ export default function RootPage() {
   }, [user, loading, router]);
 
   return (
-    <div className="flex h-screen items-center justify-center text-slate-400">
+    <div className="flex h-screen items-center justify-center text-gris">
       Cargando FutbolJoven...
     </div>
   );

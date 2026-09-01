@@ -5,10 +5,10 @@ type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md";
 
 const variantClasses: Record<Variant, string> = {
-  primary: "bg-accent-500 text-pitch-950 hover:bg-accent-600 font-semibold",
-  secondary: "bg-pitch-700 text-slate-100 hover:bg-pitch-600 border border-pitch-600",
-  ghost: "bg-transparent text-slate-300 hover:bg-pitch-800",
-  danger: "bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30",
+  primary: "bg-rojo text-white hover:bg-rojo-oscuro font-semibold shadow-sm",
+  secondary: "bg-white text-carbon hover:bg-gris-claro border border-borde",
+  ghost: "bg-transparent text-gris hover:bg-gris-claro",
+  danger: "bg-rojo/10 text-rojo-oscuro hover:bg-rojo/20 border border-rojo/30",
 };
 
 const sizeClasses: Record<Size, string> = {
@@ -21,7 +21,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
     <button
       ref={ref}
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded-md transition-colors disabled:opacity-50 disabled:pointer-events-none",
+        "inline-flex items-center justify-center gap-1.5 rounded-xl transition-colors disabled:opacity-50 disabled:pointer-events-none",
         variantClasses[variant],
         sizeClasses[size],
         className,

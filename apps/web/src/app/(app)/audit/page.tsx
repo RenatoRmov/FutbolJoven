@@ -76,7 +76,7 @@ export default function AuditPage() {
             <Tbody>
               {entries.map((e) => (
                 <Tr key={e.id}>
-                  <Td className="whitespace-nowrap text-xs text-slate-400">
+                  <Td className="whitespace-nowrap text-xs text-gris">
                     {new Date(e.createdAt).toLocaleString("es-AR")}
                   </Td>
                   <Td>{e.user ? `${e.user.firstName} ${e.user.lastName}` : "Sistema"}</Td>
@@ -84,7 +84,7 @@ export default function AuditPage() {
                     <Badge tone={ACTION_TONE[e.action] ?? "neutral"}>{e.action}</Badge>
                   </Td>
                   <Td>{e.entityType}</Td>
-                  <Td className="max-w-md truncate text-xs text-slate-400">{summarizeChange(e)}</Td>
+                  <Td className="max-w-md truncate text-xs text-gris">{summarizeChange(e)}</Td>
                 </Tr>
               ))}
             </Tbody>

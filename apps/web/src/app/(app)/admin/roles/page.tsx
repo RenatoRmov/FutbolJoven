@@ -79,7 +79,7 @@ export default function RolesAdminPage() {
               </div>
               <Button type="submit">Crear rol</Button>
             </form>
-            {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+            {error && <p className="mt-2 text-sm text-rojo-oscuro">{error}</p>}
           </CardContent>
         </Card>
 
@@ -89,7 +89,7 @@ export default function RolesAdminPage() {
             <Card key={role.id}>
               <CardHeader className="flex items-center justify-between">
                 <CardTitle>
-                  {role.name} <span className="ml-2 text-xs font-normal text-slate-500">{role._count.users} usuarios</span>
+                  {role.name} <span className="ml-2 text-xs font-normal text-gris">{role._count.users} usuarios</span>
                 </CardTitle>
                 {role.isSystem && <Badge tone="info">Rol del sistema</Badge>}
               </CardHeader>

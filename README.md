@@ -60,6 +60,17 @@ La Planilla real del club (`Planilla Control de Jugadores Final.xlsx`) tenía **
 
 El plantel real se cargó con este mismo mecanismo (no con un script aparte): los datos de identidad de las 7 hojas de la Planilla se transformaron al formato de la plantilla y se subieron por `/api/import/players/preview` → `/api/import/players/confirm`, quedando 194 jugadores reales sumados a los datos demo. Solo se importó identidad básica (nombre, RUT, fecha de nacimiento, categoría, nacionalidad) — la Planilla no traía posición/dorsal por jugador en esa hoja, así que esos campos quedan vacíos hasta que se completen desde la ficha del jugador.
 
+## Fase 3: identidad visual del club + Fixture + Financiero + informes PDF firmados
+
+A partir de un mockup de referencia enviado por el club (paleta roja/dorada/carbón, tipografías Bebas Neue + Inter, tarjetas y pills redondeadas) se hizo un rebranding visual completo del frontend — se retiró el tema oscuro genérico y se reemplazó por la identidad de Club Deportes Limache en `apps/web/tailwind.config.ts`, `globals.css` y todos los componentes de `components/ui/*` y `components/charts/*`. La estructura de navegación de escritorio se mantiene (no se copió el layout de celular del mockup), pero es responsive: en pantallas angostas el sidebar se convierte en una barra horizontal.
+
+Funcionalidad nueva:
+- **Dashboard**: se agregaron KPIs de Promedio de Nota Final, Promedio de IMC (calculado desde el registro de nutrición más reciente de cada jugador — no se inventa un índice combinando tests físicos sin unidades comparables), Promedio de altura, y el conteo Apto/En Reintegro/No Apto derivado del estado de la lesión activa más reciente de cada jugador.
+- **Fixture** (`apps/api/src/fixtures/`, `Match`/`MatchAppearance` en el schema): carga de partidos por equipo (rival, fecha, hora de citación/partido, estadio, staff del día — técnico/PF/kine/utilero) y cierre de partido con resultado + minutos/goles/tarjetas por jugador en una sola operación. Alimenta directamente la pestaña **"Minutos y Partidos"** del perfil del jugador (antes solo existía como una métrica cualitativa 1-10 dentro de la dimensión "Rendimiento").
+- **Notas Técnicas**: la pestaña de evaluaciones existente se renombró para diferenciarla claramente de "Minutos y Partidos" — mismos datos, solo la separación conceptual que pidió el club.
+- **Financiero** (`apps/api/src/finance/`, modelo `FinancialEntry`): ledger simple de ingresos/gastos con categoría libre, totales y balance mensual — visible solo con permisos `finance.view`/`finance.manage` (Director/Coordinador/Super Admin).
+- **Informes PDF firmados** (`apps/api/src/reports/`, generados con `pdfkit` — sin navegador headless, mismo criterio que ya se usó para no complicar el build de Docker): ficha individual por jugador y reporte agregado por categoría/equipo, ambos con un bloque de firma impresa (Jacob Eduardo Donoso Miranda — Director Deportivo, y Renato Jesús Oliva Aguirre) como huella de auditoría de quién generó cada informe.
+
 ## Base de datos: SQLite (dev) vs PostgreSQL (producción)
 
 El schema fue diseñado para PostgreSQL (ver sección 36 del brief original), pero el entorno donde se construyó este proyecto tenía Docker Desktop roto (falta el kernel de WSL2) y la instalación nativa de PostgreSQL 17 quedó sin contraseña de superusuario conocida y sin poder editar `pg_hba.conf` por restricciones del sandbox. Para no bloquear el desarrollo, **el datasource de Prisma está configurado con SQLite** (`apps/api/prisma/schema.prisma`, `apps/api/.env` → `DATABASE_URL="file:./dev.db"`), que no requiere ningún servicio corriendo.
@@ -211,12 +222,17 @@ Ya construido en la Fase 2 (modelo real del club):
 - Taxonomía real de posiciones y género de jugador.
 - Import/Export de Excel para jugadores (plantilla descargable, vista previa con validación de duplicados/errores, confirmación explícita, exportación con el mismo scoping por rol) — usado para cargar los 194 jugadores reales del club.
 
+Ya construido en la Fase 3 (identidad visual + Fixture + Financiero + PDF):
+- Rebranding visual completo a la identidad de Club Deportes Limache (colores, tipografía, componentes), responsive.
+- Dashboard: Promedio de Nota Final, Promedio de IMC, Promedio de altura, conteo Apto/En Reintegro/No Apto.
+- Fixture (partidos, staff del día, resultado, tarjetas) y pestaña "Minutos y Partidos" en el perfil del jugador.
+- Financiero: ledger de ingresos/gastos con balance mensual.
+- Informes PDF firmados (ficha de jugador y reporte de categoría/equipo) con huella de auditoría de quién los generó.
+
 Pendiente (schema ya migrado, sin UI/lógica):
-- Informes PDF (jugador y dirección deportiva).
 - Import/Export de Excel para evaluaciones, nutrición y otros módulos (hoy solo existe para jugadores).
 - Comparación entre jugadores y entre categorías, analítica avanzada adicional.
 - Notificaciones (modelo `Notification` listo, sin canal de envío real).
 - App móvil (Expo) consumiendo la misma API, con soporte offline.
 - Hooks de IA para resúmenes/detección de tendencias (asistencia, nunca reemplazo del criterio del cuerpo técnico).
-
-Deliberadamente fuera de alcance (dominio distinto — ver "Fase 2" arriba): módulo financiero del club y carta Gantt anual de planificación operativa.
+- Carta Gantt anual de planificación operativa (dominio distinto al de seguimiento de jugadores).

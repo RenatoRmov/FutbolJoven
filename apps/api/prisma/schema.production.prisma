@@ -32,7 +32,8 @@ model Club {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  seasons Season[]
+  seasons          Season[]
+  financialEntries FinancialEntry[]
 }
 
 model Season {
@@ -81,9 +82,69 @@ model Team {
   playerHistory   PlayerTeamHistory[]
   userAssignments UserTeamAssignment[]
   evaluations     Evaluation[]
+  matches         Match[]
 
   @@unique([categoryId, seasonId])
   @@index([seasonId])
+}
+
+// ---------------------------------------------------------------------------
+// Fixture — "Minutos y Partidos" [Fase 3]
+// ---------------------------------------------------------------------------
+
+/// One match on the season fixture. Staff-per-match are free-text fields
+/// (not User references) because matchday staff varies and doesn't always
+/// map to a formal account — matches the club's own fixture sheet.
+model Match {
+  id     String @id @default(uuid())
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  opponent    String
+  date        DateTime
+  kickoffTime String? // "hora de partido"
+  meetingTime String? // "hora de citación"
+  venue       String? // estadio
+  isHome      Boolean  @default(true)
+
+  coachName            String?
+  physicalTrainerName  String?
+  kineName             String?
+  equipmentManagerName String? // utilero
+  otherStaffNotes      String?
+
+  status        String  @default("SCHEDULED") // SCHEDULED | PLAYED | POSTPONED | CANCELLED
+  teamScore     Int?
+  opponentScore Int?
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appearances MatchAppearance[]
+
+  @@index([teamId, date])
+}
+
+/// One player's participation in one match — minutes, goals, cards. Feeds
+/// both the "Minutos y Partidos" player tab and the Fixture's card totals
+/// (summed from here, never stored separately, to avoid data drift).
+model MatchAppearance {
+  id       String @id @default(uuid())
+  matchId  String
+  match    Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  playerId String
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  started       Boolean @default(false)
+  minutesPlayed Int?
+  goals         Int     @default(0)
+  yellowCards   Int     @default(0) // 0, 1 or 2
+  redCard       Boolean @default(false)
+  notes         String?
+
+  @@unique([matchId, playerId])
+  @@index([playerId])
 }
 
 // ---------------------------------------------------------------------------
@@ -116,14 +177,14 @@ model Player {
   exitReason String?
 
   currentTeamId String?
-  currentTeam   Team? @relation(fields: [currentTeamId], references: [id], onDelete: SetNull)
+  currentTeam   Team?   @relation(fields: [currentTeamId], references: [id], onDelete: SetNull)
 
   jerseyNumber    Int?
   primaryPosition String?
   dominantFoot    String?
   height          Float?
   weight          Float?
-  status          String @default("ACTIVE")
+  status          String  @default("ACTIVE")
   notes           String?
 
   isDemo    Boolean  @default(false)
@@ -138,6 +199,7 @@ model Player {
   injuries           Injury[]
   observations       Observation[]
   documents          PlayerDocument[]
+  matchAppearances   MatchAppearance[]
 
   @@index([currentTeamId])
   @@index([status])
@@ -217,12 +279,13 @@ model User {
 
   teamAssignments  UserTeamAssignment[]
   refreshTokens    RefreshToken[]
-  evaluations      Evaluation[]      @relation("EvaluationEvaluator")
+  evaluations      Evaluation[]         @relation("EvaluationEvaluator")
   auditLogs        AuditLog[]
   observations     Observation[]
-  nutritionRecords NutritionRecord[] @relation("NutritionRecorder")
-  physicalRecords  PhysicalRecord[]  @relation("PhysicalRecorder")
-  injuries         Injury[]          @relation("InjuryRecorder")
+  nutritionRecords NutritionRecord[]    @relation("NutritionRecorder")
+  physicalRecords  PhysicalRecord[]     @relation("PhysicalRecorder")
+  injuries         Injury[]             @relation("InjuryRecorder")
+  financialEntries FinancialEntry[]
 
   @@index([roleId])
 }
@@ -367,12 +430,12 @@ model AuditLog {
 /// nutrition tracking sheet (composición corporal + hábitos alimenticios +
 /// hidratación + control médico-nutricional).
 model NutritionRecord {
-  id                String   @id @default(uuid())
-  playerId          String
-  player            Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  recordedById      String
-  recordedBy        User     @relation("NutritionRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
-  date              DateTime
+  id           String   @id @default(uuid())
+  playerId     String
+  player       Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  recordedById String
+  recordedBy   User     @relation("NutritionRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  date         DateTime
 
   // Composición corporal
   weight            Float?
@@ -381,15 +444,15 @@ model NutritionRecord {
   muscleMassPercent Float?
 
   // Hábitos alimenticios
-  mealsPerDay             Int?
-  macroBalanceNotes       String?
-  junkFoodFrequency       String?
-  mealScheduleNotes       String?
+  mealsPerDay       Int?
+  macroBalanceNotes String?
+  junkFoodFrequency String?
+  mealScheduleNotes String?
 
   // Hidratación
-  dailyWaterLiters           Float?
-  postTrainingWeightLossPct  Float?
-  hydrationColorimetry       String?
+  dailyWaterLiters          Float?
+  postTrainingWeightLossPct Float?
+  hydrationColorimetry      String?
 
   // Control médico-nutricional (hierro, ferritina, perfil bioquímico, etc.)
   labResults String? // JSON-encoded Record<string, string|number>
@@ -420,21 +483,21 @@ model PhysicalRecord {
 /// "REGISTRO M" — discrete injury events, separate from the periodic
 /// PhysicalRecord test batteries above.
 model Injury {
-  id                    String    @id @default(uuid())
-  playerId              String
-  player                Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  recordedById          String
-  recordedBy            User      @relation("InjuryRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
-  description           String
-  bodyPart              String?
-  date                  DateTime
-  severity              String? // MILD | MODERATE | SEVERE
-  expectedRecoveryDays  Int?
-  actualReturnDate      DateTime?
-  status                String    @default("ACTIVE") // ACTIVE | RECOVERING | CLEARED
-  painLevel             Int?
-  mobilityNotes         String?
-  createdAt             DateTime  @default(now())
+  id                   String    @id @default(uuid())
+  playerId             String
+  player               Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  recordedById         String
+  recordedBy           User      @relation("InjuryRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  description          String
+  bodyPart             String?
+  date                 DateTime
+  severity             String? // MILD | MODERATE | SEVERE
+  expectedRecoveryDays Int?
+  actualReturnDate     DateTime?
+  status               String    @default("ACTIVE") // ACTIVE | RECOVERING | CLEARED
+  painLevel            Int?
+  mobilityNotes        String?
+  createdAt            DateTime  @default(now())
 
   @@index([playerId, date])
 }
@@ -468,13 +531,13 @@ model Report {
 /// Configurable catalog of required documents (ingreso / salida / traspaso
 /// internacional de menores), seeded from the club's real checklist.
 model DocumentType {
-  id         String   @id @default(uuid())
-  key        String   @unique
+  id         String  @id @default(uuid())
+  key        String  @unique
   name       String
   category   String // INGRESO | SALIDA | INTERNACIONAL
-  isRequired Boolean  @default(true)
-  order      Int      @default(0)
-  isActive   Boolean  @default(true)
+  isRequired Boolean @default(true)
+  order      Int     @default(0)
+  isActive   Boolean @default(true)
 
   playerDocuments PlayerDocument[]
 }
@@ -493,6 +556,29 @@ model PlayerDocument {
 
   @@unique([playerId, documentTypeId])
   @@index([playerId])
+}
+
+// ---------------------------------------------------------------------------
+// Finanzas — ledger simple [Fase 3]
+// ---------------------------------------------------------------------------
+
+model FinancialEntry {
+  id     String @id @default(uuid())
+  clubId String
+  club   Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  date        DateTime
+  type        String // INCOME | EXPENSE
+  category    String // free text, front suggests: Sueldos, Arriendo cancha, Indumentaria, Viajes, Otros
+  amount      Float
+  description String?
+
+  recordedById String
+  recordedBy   User   @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([clubId, date])
 }
 
 model Notification {

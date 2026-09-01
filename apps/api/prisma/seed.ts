@@ -302,6 +302,7 @@ async function main() {
   let totalPlayers = 0;
   let totalEvaluations = 0;
   const createdPlayers: { id: string; birthDate: Date; joinDate: Date; status: string }[] = [];
+  const playersByTeamId = new Map<string, string[]>();
 
   for (const category of categories) {
     const team2026 = teams2026.get(category.id)!;
@@ -347,6 +348,7 @@ async function main() {
       });
       totalPlayers++;
       createdPlayers.push({ id: player.id, birthDate, joinDate, status });
+      playersByTeamId.set(team2026.id, [...(playersByTeamId.get(team2026.id) ?? []), player.id]);
 
       if (cameFromLowerCategory && team2025Previous) {
         await prisma.playerTeamHistory.create({
@@ -404,6 +406,86 @@ async function main() {
         void evaluation;
       }
     }
+  }
+
+  // --- Fixture: a played match (with appearances) + a scheduled one per team ---
+  let totalMatches = 0;
+  const rivalPool = ["Everton B", "Wanderers Formativas", "San Luis de Quillota", "Deportivo Quintero", "Colegio Salesiano"];
+  for (const category of categories) {
+    const team2026 = teams2026.get(category.id)!;
+    const coach = coachByCategoryId.get(category.id)!;
+    const teamPlayerIds = playersByTeamId.get(team2026.id) ?? [];
+    if (teamPlayerIds.length === 0) continue;
+
+    const playedDate = new Date("2026-08-08");
+    const playedMatch = await prisma.match.create({
+      data: {
+        teamId: team2026.id,
+        opponent: pick(rivalPool),
+        date: playedDate,
+        kickoffTime: "16:00",
+        meetingTime: "15:00",
+        venue: "Estadio Municipal de Limache",
+        isHome: true,
+        coachName: `${coachFirstNames[0]} Entrenador`,
+        physicalTrainerName: "Franco Preparador",
+        kineName: "Luciano Ansando Aguilar",
+        equipmentManagerName: "Benjamín Suárez",
+        status: "PLAYED",
+        teamScore: randomInt(0, 4),
+        opponentScore: randomInt(0, 3),
+      },
+    });
+    void coach;
+
+    await prisma.matchAppearance.createMany({
+      data: teamPlayerIds.map((playerId, i) => ({
+        matchId: playedMatch.id,
+        playerId,
+        started: i < 11,
+        minutesPlayed: i < 11 ? randomInt(60, 90) : randomInt(0, 30),
+        goals: Math.random() < 0.15 ? 1 : 0,
+        yellowCards: Math.random() < 0.1 ? 1 : 0,
+        redCard: Math.random() < 0.02,
+      })),
+    });
+    totalMatches++;
+
+    await prisma.match.create({
+      data: {
+        teamId: team2026.id,
+        opponent: pick(rivalPool),
+        date: new Date("2026-09-06"),
+        kickoffTime: "11:00",
+        meetingTime: "10:00",
+        venue: "Cancha Auxiliar Limache",
+        isHome: false,
+        coachName: `${coachFirstNames[0]} Entrenador`,
+        status: "SCHEDULED",
+      },
+    });
+    totalMatches++;
+  }
+
+  // --- Financiero: movimientos de ejemplo ---
+  const financeCategories = ["Sueldos", "Arriendo cancha", "Indumentaria", "Viajes", "Cuotas de socios", "Auspicios"];
+  let totalFinancialEntries = 0;
+  for (let i = 0; i < 10; i++) {
+    const monthsAgo = randomInt(0, 5);
+    const date = new Date(2026, 7 - monthsAgo, randomInt(1, 27));
+    const type = i % 3 === 0 ? "INCOME" : "EXPENSE";
+    await prisma.financialEntry.create({
+      data: {
+        clubId: club.id,
+        date,
+        type,
+        category: type === "INCOME" ? pick(["Cuotas de socios", "Auspicios"]) : pick(financeCategories),
+        amount: type === "INCOME" ? randomInt(200_000, 1_500_000) : randomInt(50_000, 800_000),
+        description: "Movimiento de demostración generado automáticamente.",
+        recordedById: admin.id,
+      },
+    });
+    totalFinancialEntries++;
   }
 
   // --- Nutrition: two records per player (baseline + follow-up) ---
@@ -496,7 +578,9 @@ async function main() {
     }
   }
 
-  console.log(`Seed complete: ${totalPlayers} players, ${totalEvaluations} evaluations, ${nutritionCount} nutrition records, ${injuryCount} injuries, ${documentCount} document entries.`);
+  console.log(
+    `Seed complete: ${totalPlayers} players, ${totalEvaluations} evaluations, ${nutritionCount} nutrition records, ${injuryCount} injuries, ${documentCount} document entries, ${totalMatches} matches, ${totalFinancialEntries} financial entries.`,
+  );
   console.log("Demo login: admin@futboljoven.demo / " + DEMO_PASSWORD);
   void admin;
 }

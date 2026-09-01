@@ -13,6 +13,8 @@ import { EvolutionLineChart, EvolutionSeries } from "@/components/charts/Evoluti
 import { NutritionTab } from "@/components/player/NutritionTab";
 import { PhysicalHealthTab } from "@/components/player/PhysicalHealthTab";
 import { DocumentsTab } from "@/components/player/DocumentsTab";
+import { MatchAppearancesTab } from "@/components/player/MatchAppearancesTab";
+import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { calculateAge, ESTATUS_LABELS, ESTATUS_TONE, GENDER_LABELS, Player, POSITION_LABELS, STATUS_LABELS, STATUS_TONE } from "@/lib/types";
@@ -105,15 +107,24 @@ export default function PlayerProfilePage() {
     <div>
       <Header title={`${player.firstName} ${player.lastName}`} />
       <div className="space-y-6 p-6">
+        <div className="flex justify-end">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => api.download(`/reports/players/${player.id}/pdf`, `${player.firstName}-${player.lastName}.pdf`)}
+          >
+            Exportar PDF
+          </Button>
+        </div>
         <Card>
           <CardContent className="flex flex-wrap items-center gap-6 py-5">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-pitch-700 text-2xl font-semibold text-slate-300">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gris-claro text-2xl font-semibold text-gris">
               {player.firstName[0]}
               {player.lastName[0]}
             </div>
             <div className="flex-1 space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold text-slate-50">
+                <h2 className="text-lg font-semibold text-carbon">
                   {player.firstName} {player.lastName}
                 </h2>
                 <Badge tone={STATUS_TONE[player.status] ?? "neutral"}>{STATUS_LABELS[player.status] ?? player.status}</Badge>
@@ -124,12 +135,12 @@ export default function PlayerProfilePage() {
                   </Badge>
                 )}
               </div>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-gris">
                 {player.currentTeam?.category?.name ?? "Sin categoría"} · {player.primaryPosition ? POSITION_LABELS[player.primaryPosition] : "Sin posición"} ·{" "}
                 {calculateAge(player.birthDate)} años · Dorsal {player.jerseyNumber ?? "—"}
                 {player.gender && ` · ${GENDER_LABELS[player.gender] ?? player.gender}`}
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-gris">
                 En el club desde {new Date(player.joinDate).toLocaleDateString("es-AR")} · {player.city ?? ""} {player.nationality ? `(${player.nationality})` : ""}
               </p>
             </div>
@@ -139,7 +150,10 @@ export default function PlayerProfilePage() {
         <Tabs defaultValue="resumen">
           <TabsList>
             <TabsTrigger value="resumen">Resumen</TabsTrigger>
-            <TabsTrigger value="evaluaciones">Evaluaciones</TabsTrigger>
+            <TabsTrigger value="evaluaciones">Notas Técnicas</TabsTrigger>
+            {hasPermission(PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED) && (
+              <TabsTrigger value="minutos">Minutos y Partidos</TabsTrigger>
+            )}
             <TabsTrigger value="evolucion">Evolución</TabsTrigger>
             <TabsTrigger value="historial">Historial</TabsTrigger>
             {hasPermission(PERMISSIONS.NUTRITION_VIEW) && <TabsTrigger value="nutricion">Nutrición</TabsTrigger>}
@@ -166,7 +180,7 @@ export default function PlayerProfilePage() {
                   </CardHeader>
                   <CardContent className="flex flex-wrap gap-2">
                     {strengths.length === 0 ? (
-                      <p className="text-sm text-slate-500">Aún no hay suficientes datos.</p>
+                      <p className="text-sm text-gris">Aún no hay suficientes datos.</p>
                     ) : (
                       strengths.map((s) => (
                         <Badge key={s} tone="success">
@@ -182,7 +196,7 @@ export default function PlayerProfilePage() {
                   </CardHeader>
                   <CardContent className="flex flex-wrap gap-2">
                     {growthAreas.length === 0 ? (
-                      <p className="text-sm text-slate-500">Sin áreas críticas detectadas.</p>
+                      <p className="text-sm text-gris">Sin áreas críticas detectadas.</p>
                     ) : (
                       growthAreas.map((s) => (
                         <Badge key={s} tone="warning">
@@ -197,7 +211,7 @@ export default function PlayerProfilePage() {
                     <CardHeader>
                       <CardTitle>Observaciones</CardTitle>
                     </CardHeader>
-                    <CardContent className="text-sm text-slate-300">{player.notes}</CardContent>
+                    <CardContent className="text-sm text-gris">{player.notes}</CardContent>
                   </Card>
                 )}
               </div>
@@ -206,17 +220,17 @@ export default function PlayerProfilePage() {
 
           <TabsContent value="evaluaciones" className="pt-5">
             <Card>
-              <CardContent className="divide-y divide-pitch-700 py-0">
+              <CardContent className="divide-y divide-borde py-0">
                 {!evaluations || evaluations.length === 0 ? (
                   <EmptyState title="Sin evaluaciones registradas" />
                 ) : (
                   evaluations.map((ev) => (
                     <div key={ev.id} className="py-4">
                       <div className="mb-2 flex items-center justify-between">
-                        <span className="text-sm font-medium text-slate-200">
+                        <span className="text-sm font-medium text-carbon">
                           {new Date(ev.date).toLocaleDateString("es-AR")} · {ev.context ?? ev.type}
                         </span>
-                        <span className="text-xs text-slate-500">
+                        <span className="text-xs text-gris">
                           {ev.evaluator.firstName} {ev.evaluator.lastName}
                         </span>
                       </div>
@@ -227,13 +241,19 @@ export default function PlayerProfilePage() {
                           </Badge>
                         ))}
                       </div>
-                      {ev.observation && <p className="mt-2 text-sm text-slate-400">{ev.observation}</p>}
+                      {ev.observation && <p className="mt-2 text-sm text-gris">{ev.observation}</p>}
                     </div>
                   ))
                 )}
               </CardContent>
             </Card>
           </TabsContent>
+
+          {hasPermission(PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED) && (
+            <TabsContent value="minutos" className="pt-5">
+              <MatchAppearancesTab playerId={player.id} />
+            </TabsContent>
+          )}
 
           <TabsContent value="evolucion" className="pt-5">
             <Card>
@@ -256,14 +276,14 @@ export default function PlayerProfilePage() {
                 {!player.teamHistory || player.teamHistory.length === 0 ? (
                   <EmptyState title="Sin historial de categorías" />
                 ) : (
-                  <ol className="relative border-l border-pitch-700 pl-5">
+                  <ol className="relative border-l border-borde pl-5">
                     {[...player.teamHistory]
                       .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
                       .map((h) => (
                         <li key={h.id} className="mb-6 last:mb-0">
-                          <div className="absolute -ml-[25px] mt-1 h-3 w-3 rounded-full bg-accent-500" />
-                          <p className="text-sm font-medium text-slate-100">{h.team.name}</p>
-                          <p className="text-xs text-slate-500">
+                          <div className="absolute -ml-[25px] mt-1 h-3 w-3 rounded-full bg-rojo" />
+                          <p className="text-sm font-medium text-carbon">{h.team.name}</p>
+                          <p className="text-xs text-gris">
                             {new Date(h.startDate).toLocaleDateString("es-AR")} —{" "}
                             {h.endDate ? new Date(h.endDate).toLocaleDateString("es-AR") : "actualidad"}
                           </p>

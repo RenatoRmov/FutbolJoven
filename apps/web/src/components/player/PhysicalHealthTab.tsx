@@ -171,25 +171,25 @@ export function PhysicalHealthTab({ playerId }: { playerId: string }) {
           </Card>
         </div>
       )}
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && <p className="text-sm text-rojo-oscuro">{error}</p>}
 
       <Card>
         <CardHeader>
           <CardTitle>Historial de lesiones</CardTitle>
         </CardHeader>
-        <CardContent className="divide-y divide-pitch-700 py-0">
+        <CardContent className="divide-y divide-borde py-0">
           {injuries.length === 0 ? (
             <EmptyState title="Sin lesiones registradas" />
           ) : (
             injuries.map((inj) => (
               <div key={inj.id} className="py-4">
                 <div className="mb-1 flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-200">
+                  <span className="text-sm font-medium text-carbon">
                     {inj.description} {inj.bodyPart && `— ${inj.bodyPart}`}
                   </span>
                   <Badge tone={INJURY_STATUS_TONE[inj.status] ?? "neutral"}>{INJURY_STATUS_LABELS[inj.status] ?? inj.status}</Badge>
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-gris">
                   {new Date(inj.date).toLocaleDateString("es-AR")}
                   {inj.expectedRecoveryDays !== null && ` · Recuperación estimada: ${inj.expectedRecoveryDays} días`}
                   {inj.painLevel !== null && ` · Dolor: ${inj.painLevel}/10`}
@@ -204,15 +204,15 @@ export function PhysicalHealthTab({ playerId }: { playerId: string }) {
         <CardHeader>
           <CardTitle>Baterías físicas</CardTitle>
         </CardHeader>
-        <CardContent className="divide-y divide-pitch-700 py-0">
+        <CardContent className="divide-y divide-borde py-0">
           {records.length === 0 ? (
             <EmptyState title="Sin baterías físicas registradas" />
           ) : (
             records.map((r) => (
               <div key={r.id} className="py-4">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-200">{new Date(r.date).toLocaleDateString("es-AR")}</span>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-sm font-medium text-carbon">{new Date(r.date).toLocaleDateString("es-AR")}</span>
+                  <span className="text-xs text-gris">
                     {r.recordedBy.firstName} {r.recordedBy.lastName}
                   </span>
                 </div>

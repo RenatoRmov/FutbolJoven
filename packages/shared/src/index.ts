@@ -4,3 +4,4 @@ export * from "./types";
 export * from "./schemas";
 export * from "./documents";
 export * from "./import";
+export * from "./fixtures";

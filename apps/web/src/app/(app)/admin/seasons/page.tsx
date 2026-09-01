@@ -72,7 +72,7 @@ export default function SeasonsAdminPage() {
                 Crear
               </Button>
             </form>
-            {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+            {error && <p className="mt-2 text-sm text-rojo-oscuro">{error}</p>}
           </CardContent>
         </Card>
 
@@ -89,7 +89,7 @@ export default function SeasonsAdminPage() {
           <Tbody>
             {seasons.map((s) => (
               <Tr key={s.id}>
-                <Td className="font-medium text-slate-100">{s.name}</Td>
+                <Td className="font-medium text-carbon">{s.name}</Td>
                 <Td>{new Date(s.startDate).toLocaleDateString("es-AR")}</Td>
                 <Td>{new Date(s.endDate).toLocaleDateString("es-AR")}</Td>
                 <Td>{s.isActive ? <Badge tone="success">Activa</Badge> : <Badge tone="neutral">Inactiva</Badge>}</Td>

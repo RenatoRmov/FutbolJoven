@@ -60,18 +60,18 @@ export function DocumentsTab({ playerId }: { playerId: string }) {
           <CardHeader>
             <CardTitle>{DOCUMENT_CATEGORY_LABELS[category]}</CardTitle>
           </CardHeader>
-          <CardContent className="divide-y divide-pitch-700 py-0">
+          <CardContent className="divide-y divide-borde py-0">
             {categoryRows.map((row) => {
               const status = row.document?.status ?? "PENDING";
               return (
                 <div key={row.documentType.id} className="flex items-center justify-between gap-3 py-3">
                   <div>
-                    <p className="text-sm text-slate-200">
+                    <p className="text-sm text-carbon">
                       {row.documentType.name}
-                      {!row.documentType.isRequired && <span className="ml-2 text-xs text-slate-500">(opcional)</span>}
+                      {!row.documentType.isRequired && <span className="ml-2 text-xs text-gris">(opcional)</span>}
                     </p>
                     {row.document?.submittedDate && (
-                      <p className="text-xs text-slate-500">Entregado el {new Date(row.document.submittedDate).toLocaleDateString("es-AR")}</p>
+                      <p className="text-xs text-gris">Entregado el {new Date(row.document.submittedDate).toLocaleDateString("es-AR")}</p>
                     )}
                   </div>
                   {canManage ? (

@@ -2,7 +2,7 @@ import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, forw
 import { cn } from "@/lib/cn";
 
 const fieldClasses =
-  "w-full rounded-md border border-pitch-600 bg-pitch-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500 disabled:opacity-50";
+  "w-full rounded-xl border border-borde bg-crema px-3 py-2 text-sm text-carbon placeholder:text-gris focus:border-rojo focus:bg-white focus:outline-none focus:ring-1 focus:ring-rojo disabled:opacity-50";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, ...props }, ref) => (
   <input ref={ref} className={cn(fieldClasses, className)} {...props} />
@@ -22,5 +22,5 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
 Select.displayName = "Select";
 
 export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
-  return <label className={cn("mb-1 block text-xs font-medium text-slate-400", className)} {...props} />;
+  return <label className={cn("mb-1 block text-xs font-semibold text-gris", className)} {...props} />;
 }

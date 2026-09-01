@@ -127,7 +127,7 @@ export function NutritionTab({ playerId }: { playerId: string }) {
                 </Button>
               </div>
             </form>
-            {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+            {error && <p className="mt-2 text-sm text-rojo-oscuro">{error}</p>}
           </CardContent>
         </Card>
       )}
@@ -156,14 +156,14 @@ export function NutritionTab({ playerId }: { playerId: string }) {
           </div>
 
           <Card>
-            <CardContent className="divide-y divide-pitch-700 py-0">
+            <CardContent className="divide-y divide-borde py-0">
               {records.map((r) => {
                 const imc = computeImc(r.weight, r.height);
                 return (
                   <div key={r.id} className="py-4">
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="text-sm font-medium text-slate-200">{new Date(r.date).toLocaleDateString("es-AR")}</span>
-                      <span className="text-xs text-slate-500">
+                      <span className="text-sm font-medium text-carbon">{new Date(r.date).toLocaleDateString("es-AR")}</span>
+                      <span className="text-xs text-gris">
                         {r.recordedBy.firstName} {r.recordedBy.lastName}
                       </span>
                     </div>
@@ -176,7 +176,7 @@ export function NutritionTab({ playerId }: { playerId: string }) {
                       {r.dailyWaterLiters !== null && <Badge tone="neutral">{r.dailyWaterLiters} L agua/día</Badge>}
                       {r.status && <Badge tone="info">{r.status}</Badge>}
                     </div>
-                    {r.observations && <p className="mt-2 text-sm text-slate-400">{r.observations}</p>}
+                    {r.observations && <p className="mt-2 text-sm text-gris">{r.observations}</p>}
                   </div>
                 );
               })}

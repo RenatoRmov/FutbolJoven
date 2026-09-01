@@ -39,7 +39,7 @@ export default function EvaluationsHomePage() {
     <div>
       <Header title="Evaluaciones" />
       <div className="space-y-4 p-6">
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-gris">
           {canCreateAll
             ? "Seleccioná una categoría y equipo para cargar evaluaciones."
             : "Estos son los equipos que tenés asignados."}

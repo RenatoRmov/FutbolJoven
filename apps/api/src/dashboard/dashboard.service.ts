@@ -25,16 +25,25 @@ export class DashboardService {
   private async getGlobalSummary() {
     const cutoff = new Date(Date.now() - RECENT_DAYS * 86_400_000);
 
-    const [activePlayers, totalCategories, totalTeams, evaluationsRecent, evaluationsTotal, allActivePlayerIds, evaluatedRecentPlayerIds] =
-      await Promise.all([
-        this.prisma.player.count({ where: { status: "ACTIVE" } }),
-        this.prisma.category.count({ where: { isActive: true } }),
-        this.prisma.team.count(),
-        this.prisma.evaluation.count({ where: { date: { gte: cutoff } } }),
-        this.prisma.evaluation.count(),
-        this.prisma.player.findMany({ where: { status: "ACTIVE" }, select: { id: true } }),
-        this.prisma.evaluation.findMany({ where: { date: { gte: cutoff } }, select: { playerId: true }, distinct: ["playerId"] }),
-      ]);
+    const [
+      activePlayers,
+      totalCategories,
+      totalTeams,
+      evaluationsRecent,
+      evaluationsTotal,
+      allActivePlayerIds,
+      evaluatedRecentPlayerIds,
+      measurements,
+    ] = await Promise.all([
+      this.prisma.player.count({ where: { status: "ACTIVE" } }),
+      this.prisma.category.count({ where: { isActive: true } }),
+      this.prisma.team.count(),
+      this.prisma.evaluation.count({ where: { date: { gte: cutoff } } }),
+      this.prisma.evaluation.count(),
+      this.prisma.player.findMany({ where: { status: "ACTIVE" }, select: { id: true } }),
+      this.prisma.evaluation.findMany({ where: { date: { gte: cutoff } }, select: { playerId: true }, distinct: ["playerId"] }),
+      this.computeMeasurementStats(),
+    ]);
 
     const evaluatedSet = new Set(evaluatedRecentPlayerIds.map((e) => e.playerId));
     const playersWithoutRecentEvaluation = allActivePlayerIds.filter((p) => !evaluatedSet.has(p.id)).length;
@@ -112,6 +121,9 @@ export class DashboardService {
         playersWithoutRecentEvaluation,
         playersImproving: improving.length,
         playersDeclining: declining.length,
+        avgHeight: measurements.avgHeight,
+        avgBmi: measurements.avgBmi,
+        aptitud: measurements.aptitud,
       },
       notaFinalByCategory,
       estatusDistribution,
@@ -174,6 +186,64 @@ export class DashboardService {
    * configured). Bounded to demo/mid-size datasets — for large clubs this
    * should move to a scheduled aggregation job.
    */
+  /**
+   * "Promedio de mediciones y nutrición" — deliberately kept to two concrete,
+   * comparable figures: average height (from Player.height) and average BMI
+   * from each player's most recent NutritionRecord (weight/height² — real
+   * units, unlike PhysicalRecord.metrics which is a free-form JSON blob with
+   * no fixed unit per test, so it can't be meaningfully averaged into a
+   * single index). Aptitud is derived from each player's most recent Injury:
+   * no active/recovering injury -> apto; RECOVERING -> enReintegro; ACTIVE -> noApto.
+   */
+  private async computeMeasurementStats() {
+    const [players, latestNutrition, latestInjuries] = await Promise.all([
+      this.prisma.player.findMany({ where: { status: "ACTIVE" }, select: { id: true, height: true } }),
+      this.prisma.nutritionRecord.findMany({
+        where: { player: { status: "ACTIVE" } },
+        select: { playerId: true, date: true, weight: true, height: true },
+        orderBy: { date: "desc" },
+      }),
+      this.prisma.injury.findMany({
+        where: { player: { status: "ACTIVE" } },
+        select: { playerId: true, date: true, status: true },
+        orderBy: { date: "desc" },
+      }),
+    ]);
+
+    const heights = players.map((p) => p.height).filter((h): h is number => h !== null);
+    const avgHeight = average(heights);
+
+    const latestNutritionByPlayer = new Map<string, { weight: number | null; height: number | null }>();
+    for (const record of latestNutrition) {
+      if (!latestNutritionByPlayer.has(record.playerId)) {
+        latestNutritionByPlayer.set(record.playerId, { weight: record.weight, height: record.height });
+      }
+    }
+    const bmis: number[] = [];
+    for (const { weight, height } of latestNutritionByPlayer.values()) {
+      if (weight === null || height === null || height <= 0) continue;
+      const heightMeters = height / 100;
+      bmis.push(weight / (heightMeters * heightMeters));
+    }
+    const avgBmi = average(bmis);
+
+    const latestInjuryByPlayer = new Map<string, string>();
+    for (const injury of latestInjuries) {
+      if (!latestInjuryByPlayer.has(injury.playerId)) latestInjuryByPlayer.set(injury.playerId, injury.status);
+    }
+    let apto = 0;
+    let noApto = 0;
+    let enReintegro = 0;
+    for (const player of players) {
+      const status = latestInjuryByPlayer.get(player.id);
+      if (status === "ACTIVE") noApto++;
+      else if (status === "RECOVERING") enReintegro++;
+      else apto++;
+    }
+
+    return { avgHeight, avgBmi, aptitud: { apto, noApto, enReintegro } };
+  }
+
   private async computeNotaFinalStats(playerIds: string[]) {
     const dimensions = await this.prisma.evaluationDimension.findMany({ where: { isActive: true } });
     const weightByDimension = new Map(dimensions.map((d) => [d.id, d.weight]));

@@ -2,7 +2,7 @@
 
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-const COLORS = ["#22c55e", "#38bdf8", "#f97316", "#a78bfa", "#facc15", "#f472b6"];
+const COLORS = ["#C8102E", "#F0B429", "#1D5FB3", "#1E7A3E", "#8C0E22", "#B4531A"];
 
 export interface EvolutionSeries {
   dimensionName: string;
@@ -27,18 +27,18 @@ export function EvolutionLineChart({ series }: { series: EvolutionSeries[] }) {
   return (
     <ResponsiveContainer width="100%" height={320}>
       <LineChart data={rows} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
-        <CartesianGrid stroke="#182636" vertical={false} />
+        <CartesianGrid stroke="#E6DEDA" vertical={false} />
         <XAxis
           dataKey="date"
-          tick={{ fill: "#64748b", fontSize: 11 }}
+          tick={{ fill: "#6E6660", fontSize: 11 }}
           tickFormatter={(v: string) => new Date(v).toLocaleDateString("es-AR", { day: "2-digit", month: "short" })}
         />
-        <YAxis domain={[0, 10]} tick={{ fill: "#64748b", fontSize: 11 }} />
+        <YAxis domain={[0, 10]} tick={{ fill: "#6E6660", fontSize: 11 }} />
         <Tooltip
-          contentStyle={{ background: "#101c29", border: "1px solid #223549", borderRadius: 8, fontSize: 12 }}
+          contentStyle={{ background: "#fff", border: "1px solid #E6DEDA", borderRadius: 8, fontSize: 12 }}
           labelFormatter={(v: string) => new Date(v).toLocaleDateString("es-AR")}
         />
-        <Legend wrapperStyle={{ fontSize: 12, color: "#94a3b8" }} />
+        <Legend wrapperStyle={{ fontSize: 12, color: "#6E6660" }} />
         {series.map((s, i) => (
           <Line
             key={s.dimensionName}

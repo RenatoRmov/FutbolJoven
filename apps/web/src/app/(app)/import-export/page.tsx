@@ -103,7 +103,7 @@ export default function ImportExportPage() {
               <CardTitle>Importar jugadores desde Excel</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-gris">
                 Descargá la plantilla, completá los datos y subí el archivo. Vas a poder revisar una vista previa antes de confirmar —
                 nunca se importa nada automáticamente.
               </p>
@@ -117,11 +117,11 @@ export default function ImportExportPage() {
                 <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleFileSelected} />
               </div>
 
-              {error && <p className="text-sm text-red-400">{error}</p>}
+              {error && <p className="text-sm text-rojo-oscuro">{error}</p>}
 
               {result && (
-                <div className="rounded-lg border border-pitch-700 bg-pitch-900/40 p-4 text-sm">
-                  <p className="mb-2 font-medium text-slate-200">Importación completada</p>
+                <div className="rounded-lg border border-borde bg-white p-4 text-sm">
+                  <p className="mb-2 font-medium text-carbon">Importación completada</p>
                   <div className="flex flex-wrap gap-2">
                     <Badge tone="success">Importados: {result.imported}</Badge>
                     <Badge tone="info">Actualizados: {result.updated}</Badge>
@@ -163,7 +163,7 @@ export default function ImportExportPage() {
                               {r.outcome === "valid" ? (r.action === "update" ? "Actualizar" : "Crear") : OUTCOME_LABEL[r.outcome]}
                             </Badge>
                           </Td>
-                          <Td className="max-w-xs text-xs text-slate-400">{r.errors?.join("; ")}</Td>
+                          <Td className="max-w-xs text-xs text-gris">{r.errors?.join("; ")}</Td>
                         </Tr>
                       ))}
                     </Tbody>
@@ -184,7 +184,7 @@ export default function ImportExportPage() {
               <CardTitle>Exportar jugadores a Excel</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="mb-3 text-sm text-slate-400">Descarga un Excel con los jugadores que podés ver, según tu rol y equipos asignados.</p>
+              <p className="mb-3 text-sm text-gris">Descarga un Excel con los jugadores que podés ver, según tu rol y equipos asignados.</p>
               <Button variant="secondary" onClick={handleExport}>
                 Exportar jugadores
               </Button>

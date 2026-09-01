@@ -67,6 +67,12 @@ const PERMISSION_DESCRIPTIONS: Record<string, string> = {
   [PERMISSIONS.REPORTS_GENERATE]: "Generar informes",
   [PERMISSIONS.DATA_EXPORT]: "Exportar información a Excel",
   [PERMISSIONS.DATA_IMPORT]: "Importar información masivamente",
+  [PERMISSIONS.FIXTURES_VIEW_ALL]: "Ver el fixture de todos los equipos",
+  [PERMISSIONS.FIXTURES_VIEW_ASSIGNED]: "Ver el fixture de los equipos asignados",
+  [PERMISSIONS.FIXTURES_MANAGE_ALL]: "Cargar partidos y resultados de cualquier equipo",
+  [PERMISSIONS.FIXTURES_MANAGE_ASSIGNED]: "Cargar partidos y resultados de los equipos asignados",
+  [PERMISSIONS.FINANCE_VIEW]: "Ver el estado financiero del club",
+  [PERMISSIONS.FINANCE_MANAGE]: "Registrar ingresos y gastos del club",
 };
 
 const CATEGORY_DEFS = [

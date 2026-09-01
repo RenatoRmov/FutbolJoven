@@ -30,6 +30,9 @@ interface GlobalSummary {
     playersWithoutRecentEvaluation: number;
     playersImproving: number;
     playersDeclining: number;
+    avgHeight: number | null;
+    avgBmi: number | null;
+    aptitud: { apto: number; noApto: number; enReintegro: number };
   };
   notaFinalByCategory: CategoryBarPoint[];
   estatusDistribution: StatusBarPoint[];
@@ -48,6 +51,11 @@ interface AssignedSummary {
 }
 
 type Summary = GlobalSummary | AssignedSummary;
+
+function average(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
 
 export default function DashboardPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -81,10 +89,24 @@ export default function DashboardPage() {
 
 function GlobalDashboard({ summary }: { summary: GlobalSummary }) {
   const { kpis, notaFinalByCategory, estatusDistribution, notaFinalTrend, topImproving, topDeclining } = summary;
+  const notaFinalPromedio = average(notaFinalByCategory.map((c) => c.avgNotaFinal).filter((v): v is number => v !== null));
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <KpiCard label="Promedio Nota Final" value={notaFinalPromedio === null ? "—" : notaFinalPromedio.toFixed(1)} />
+        <KpiCard label="Promedio IMC" value={kpis.avgBmi === null ? "—" : kpis.avgBmi.toFixed(1)} />
+        <KpiCard label="Promedio altura" value={kpis.avgHeight === null ? "—" : `${kpis.avgHeight.toFixed(0)} cm`} />
         <KpiCard label="Jugadores activos" value={kpis.activePlayers} />
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <KpiCard label="Aptos" value={kpis.aptitud.apto} tone="success" />
+        <KpiCard label="En reintegro" value={kpis.aptitud.enReintegro} tone="warning" />
+        <KpiCard label="No aptos" value={kpis.aptitud.noApto} tone={kpis.aptitud.noApto > 0 ? "danger" : "neutral"} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <KpiCard label="Categorías" value={kpis.totalCategories} />
         <KpiCard label="Equipos" value={kpis.totalTeams} />
         <KpiCard label="Evaluaciones (30 días)" value={kpis.evaluationsLast30Days} />
@@ -97,6 +119,21 @@ function GlobalDashboard({ summary }: { summary: GlobalSummary }) {
         <KpiCard label="Jugadores en crecimiento" value={kpis.playersImproving} tone="success" />
         <KpiCard label="Jugadores en descenso" value={kpis.playersDeclining} tone={kpis.playersDeclining > 0 ? "danger" : "neutral"} />
       </div>
+
+      {notaFinalByCategory.length > 0 && (
+        <div>
+          <p className="mb-2 font-display text-base tracking-wide text-rojo-oscuro">Promedio por categoría</p>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {notaFinalByCategory.map((c) => (
+              <div key={c.categoryName} className="shrink-0 rounded-xl border border-borde bg-white px-4 py-2.5 text-center shadow-sm">
+                <p className="font-display text-xl leading-none tracking-wide text-rojo">{c.avgNotaFinal === null ? "—" : c.avgNotaFinal.toFixed(1)}</p>
+                <p className="mt-1 whitespace-nowrap text-[11px] font-bold text-carbon">{c.categoryName}</p>
+                <p className="text-[10px] text-gris">{c.playerCount} jug.</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -142,12 +179,12 @@ function GlobalDashboard({ summary }: { summary: GlobalSummary }) {
           </CardHeader>
           <CardContent>
             {topImproving.length === 0 ? (
-              <p className="text-sm text-slate-500">Sin datos suficientes todavía.</p>
+              <p className="text-sm text-gris">Sin datos suficientes todavía.</p>
             ) : (
               <ul className="space-y-2 text-sm">
                 {topImproving.map((p) => (
                   <li key={p.playerId} className="flex items-center justify-between">
-                    <Link href={`/players/${p.playerId}`} className="text-slate-200 hover:text-accent-500">
+                    <Link href={`/players/${p.playerId}`} className="text-carbon hover:text-rojo">
                       {p.name}
                     </Link>
                     <Badge tone="success">+{p.delta.toFixed(1)}</Badge>
@@ -164,12 +201,12 @@ function GlobalDashboard({ summary }: { summary: GlobalSummary }) {
           </CardHeader>
           <CardContent>
             {topDeclining.length === 0 ? (
-              <p className="text-sm text-slate-500">Sin jugadores en descenso significativo.</p>
+              <p className="text-sm text-gris">Sin jugadores en descenso significativo.</p>
             ) : (
               <ul className="space-y-2 text-sm">
                 {topDeclining.map((p) => (
                   <li key={p.playerId} className="flex items-center justify-between">
-                    <Link href={`/players/${p.playerId}`} className="text-slate-200 hover:text-accent-500">
+                    <Link href={`/players/${p.playerId}`} className="text-carbon hover:text-rojo">
                       {p.name}
                     </Link>
                     <Badge tone="danger">{p.delta.toFixed(1)}</Badge>
@@ -186,13 +223,13 @@ function GlobalDashboard({ summary }: { summary: GlobalSummary }) {
           <CardTitle>Accesos rápidos</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3 text-sm">
-          <Link href="/players" className="text-accent-500 hover:underline">
+          <Link href="/players" className="text-rojo hover:underline">
             Ver jugadores →
           </Link>
-          <Link href="/evaluations" className="text-accent-500 hover:underline">
+          <Link href="/evaluations" className="text-rojo hover:underline">
             Cargar evaluaciones →
           </Link>
-          <Link href="/audit" className="text-accent-500 hover:underline">
+          <Link href="/audit" className="text-rojo hover:underline">
             Revisar auditoría →
           </Link>
         </CardContent>
@@ -270,11 +307,11 @@ function AssignedDashboard({ summary }: { summary: AssignedSummary }) {
           ) : (
             <ul className="space-y-2 text-sm">
               {recentEvaluations.map((e) => (
-                <li key={e.id} className="flex items-center justify-between border-b border-pitch-700 pb-2 last:border-0">
-                  <span className="text-slate-200">
+                <li key={e.id} className="flex items-center justify-between border-b border-borde pb-2 last:border-0">
+                  <span className="text-carbon">
                     {e.player.firstName} {e.player.lastName}
                   </span>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-gris">
                     {new Date(e.date).toLocaleDateString("es-AR")} · {e.type}
                   </span>
                 </li>

@@ -200,3 +200,62 @@ export const upsertPlayerDocumentSchema = z.object({
   notes: z.string().max(500).optional().nullable(),
 });
 export type UpsertPlayerDocumentDto = z.infer<typeof upsertPlayerDocumentSchema>;
+
+// ---------------------------------------------------------------------------
+// Fixture — "Minutos y Partidos"
+// ---------------------------------------------------------------------------
+
+export const matchStatusEnum = z.enum(["SCHEDULED", "PLAYED", "POSTPONED", "CANCELLED"]);
+
+export const createMatchSchema = z.object({
+  teamId: z.string().uuid(),
+  opponent: z.string().min(1).max(120),
+  date: z.coerce.date(),
+  kickoffTime: z.string().max(20).optional().nullable(),
+  meetingTime: z.string().max(20).optional().nullable(),
+  venue: z.string().max(150).optional().nullable(),
+  isHome: z.boolean().optional().default(true),
+  coachName: z.string().max(150).optional().nullable(),
+  physicalTrainerName: z.string().max(150).optional().nullable(),
+  kineName: z.string().max(150).optional().nullable(),
+  equipmentManagerName: z.string().max(150).optional().nullable(),
+  otherStaffNotes: z.string().max(500).optional().nullable(),
+  notes: z.string().max(1000).optional().nullable(),
+});
+export type CreateMatchDto = z.infer<typeof createMatchSchema>;
+
+export const updateMatchSchema = createMatchSchema.partial().omit({ teamId: true });
+export type UpdateMatchDto = z.infer<typeof updateMatchSchema>;
+
+export const matchAppearanceEntrySchema = z.object({
+  playerId: z.string().uuid(),
+  started: z.boolean().optional().default(false),
+  minutesPlayed: z.coerce.number().int().min(0).max(150).optional().nullable(),
+  goals: z.coerce.number().int().min(0).max(20).optional().default(0),
+  yellowCards: z.coerce.number().int().min(0).max(2).optional().default(0),
+  redCard: z.boolean().optional().default(false),
+  notes: z.string().max(300).optional().nullable(),
+});
+export type MatchAppearanceEntryDto = z.infer<typeof matchAppearanceEntrySchema>;
+
+export const recordMatchResultSchema = z.object({
+  teamScore: z.coerce.number().int().min(0).max(50),
+  opponentScore: z.coerce.number().int().min(0).max(50),
+  appearances: z.array(matchAppearanceEntrySchema).min(1),
+});
+export type RecordMatchResultDto = z.infer<typeof recordMatchResultSchema>;
+
+// ---------------------------------------------------------------------------
+// Financiero
+// ---------------------------------------------------------------------------
+
+export const financialEntryTypeEnum = z.enum(["INCOME", "EXPENSE"]);
+
+export const createFinancialEntrySchema = z.object({
+  date: z.coerce.date(),
+  type: financialEntryTypeEnum,
+  category: z.string().min(1).max(80),
+  amount: z.coerce.number().positive().max(999_999_999),
+  description: z.string().max(500).optional().nullable(),
+});
+export type CreateFinancialEntryDto = z.infer<typeof createFinancialEntrySchema>;

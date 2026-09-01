@@ -84,7 +84,7 @@ export default function CategoriesAdminPage() {
                 Crear
               </Button>
             </form>
-            {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+            {error && <p className="mt-2 text-sm text-rojo-oscuro">{error}</p>}
           </CardContent>
         </Card>
 
@@ -104,7 +104,7 @@ export default function CategoriesAdminPage() {
               .map((c) => (
                 <Tr key={c.id}>
                   <Td>{c.order}</Td>
-                  <Td className="font-medium text-slate-100">{c.name}</Td>
+                  <Td className="font-medium text-carbon">{c.name}</Td>
                   <Td>{c.minAge && c.maxAge ? `${c.minAge}-${c.maxAge} años` : "—"}</Td>
                   <Td>{c.isActive ? <Badge tone="success">Activa</Badge> : <Badge tone="neutral">Inactiva</Badge>}</Td>
                   <Td>

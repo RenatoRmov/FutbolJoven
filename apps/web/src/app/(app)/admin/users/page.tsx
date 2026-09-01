@@ -130,7 +130,7 @@ export default function UsersAdminPage() {
                 Crear usuario
               </Button>
             </form>
-            {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+            {error && <p className="mt-2 text-sm text-rojo-oscuro">{error}</p>}
           </CardContent>
         </Card>
 
@@ -148,7 +148,7 @@ export default function UsersAdminPage() {
           <Tbody>
             {users.map((u) => (
               <Tr key={u.id}>
-                <Td className="font-medium text-slate-100">
+                <Td className="font-medium text-carbon">
                   {u.firstName} {u.lastName}
                 </Td>
                 <Td>{u.email}</Td>

@@ -96,11 +96,11 @@ export default function QuickEvaluationPage() {
         <Card>
           <CardContent className="flex flex-wrap items-end gap-4 py-4">
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-400">Fecha</label>
+              <label className="mb-1 block text-xs font-medium text-gris">Fecha</label>
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-400">Tipo</label>
+              <label className="mb-1 block text-xs font-medium text-gris">Tipo</label>
               <Select value={type} onChange={(e) => setType(e.target.value)} className="w-44">
                 {EVALUATION_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>
@@ -110,7 +110,7 @@ export default function QuickEvaluationPage() {
               </Select>
             </div>
             <div className="flex-1 min-w-[200px]">
-              <label className="mb-1 block text-xs font-medium text-slate-400">Contexto (opcional)</label>
+              <label className="mb-1 block text-xs font-medium text-gris">Contexto (opcional)</label>
               <Input placeholder="vs. Rival FC" value={context} onChange={(e) => setContext(e.target.value)} />
             </div>
             <Button onClick={handleSubmit} disabled={saving || !players || players.length === 0}>
@@ -119,7 +119,7 @@ export default function QuickEvaluationPage() {
           </CardContent>
         </Card>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-rojo-oscuro">{error}</p>}
         {success && <p className="text-sm text-emerald-400">{success}</p>}
 
         {!players && (
@@ -136,7 +136,7 @@ export default function QuickEvaluationPage() {
           <Table>
             <Thead>
               <Tr>
-                <Th className="sticky left-0 bg-pitch-800">Jugador</Th>
+                <Th className="sticky left-0 bg-gris-claro">Jugador</Th>
                 {dimensions.map((d) => (
                   <Th key={d.id}>{d.name}</Th>
                 ))}
@@ -146,7 +146,7 @@ export default function QuickEvaluationPage() {
             <Tbody>
               {players.map((p) => (
                 <Tr key={p.id}>
-                  <Td className="sticky left-0 whitespace-nowrap bg-pitch-900 font-medium text-slate-100">
+                  <Td className="sticky left-0 whitespace-nowrap bg-white font-medium text-carbon">
                     {p.firstName} {p.lastName}
                   </Td>
                   {dimensions.map((d) => (

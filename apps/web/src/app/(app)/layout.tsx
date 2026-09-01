@@ -15,14 +15,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (loading || !user) {
     return (
-      <div className="flex h-screen items-center justify-center bg-pitch-950 text-slate-400">
+      <div className="flex h-screen items-center justify-center bg-crema text-gris">
         Cargando...
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-pitch-950">
+    <div className="flex h-screen flex-col bg-crema md:flex-row">
       <Sidebar />
       <main className="scrollbar-thin flex-1 overflow-y-auto">{children}</main>
     </div>
