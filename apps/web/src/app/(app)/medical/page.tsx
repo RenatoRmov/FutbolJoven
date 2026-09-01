@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton, EmptyState } from "@/components/ui/Skeleton";
+import { FichaMedicaModal } from "@/components/medical/FichaMedicaModal";
 import { cn } from "@/lib/cn";
 import { api } from "@/lib/api-client";
 import { Category } from "@/lib/types";
@@ -14,6 +14,7 @@ interface MedicalStatusRow {
   id: string;
   firstName: string;
   lastName: string;
+  birthDate: string;
   categoryId: string | null;
   categoryName: string;
   aptitud: "APTO" | "EN_REINTEGRO" | "NO_APTO";
@@ -36,9 +37,14 @@ export default function MedicalPage() {
   const [rows, setRows] = useState<MedicalStatusRow[] | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [selectedPlayer, setSelectedPlayer] = useState<MedicalStatusRow | null>(null);
+
+  function load() {
+    api.get<MedicalStatusRow[]>("/physical/medical-status").then(setRows);
+  }
 
   useEffect(() => {
-    api.get<MedicalStatusRow[]>("/physical/medical-status").then(setRows);
+    load();
     api.get<Category[]>("/categories").then(setCategories);
   }, []);
 
@@ -97,10 +103,10 @@ export default function MedicalPage() {
           <Card>
             <CardContent className="divide-y divide-borde py-0">
               {sorted.map((r) => (
-                <Link
+                <button
                   key={r.id}
-                  href={`/players/${r.id}`}
-                  className="flex items-center justify-between gap-3 py-3.5 hover:bg-gris-claro/60"
+                  onClick={() => setSelectedPlayer(r)}
+                  className="flex w-full items-center justify-between gap-3 py-3.5 text-left hover:bg-gris-claro/60"
                 >
                   <div className="flex items-center gap-3">
                     <span
@@ -120,12 +126,23 @@ export default function MedicalPage() {
                     </div>
                   </div>
                   <Badge tone={APTITUD_TONE[r.aptitud]}>{APTITUD_LABELS[r.aptitud]}</Badge>
-                </Link>
+                </button>
               ))}
             </CardContent>
           </Card>
         )}
       </div>
+
+      {selectedPlayer && (
+        <FichaMedicaModal
+          playerId={selectedPlayer.id}
+          playerName={`${selectedPlayer.firstName} ${selectedPlayer.lastName}`}
+          categoryName={selectedPlayer.categoryName}
+          birthDate={selectedPlayer.birthDate}
+          onClose={() => setSelectedPlayer(null)}
+          onChanged={load}
+        />
+      )}
     </div>
   );
 }

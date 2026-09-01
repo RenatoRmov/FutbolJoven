@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { PERMISSIONS } from "@futboljoven/shared";
@@ -77,9 +78,8 @@ export function Sidebar() {
     <>
       {/* Mobile: horizontal scrollable strip on top */}
       <aside className="flex shrink-0 items-center gap-2 overflow-x-auto bg-gradient-to-r from-rojo-oscuro to-rojo-noche px-3 py-2 md:hidden">
-        <div className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-[10px] font-bold text-rojo-oscuro">
-          CDL
-        </div>
+        <Image src="/escudo-club.png" alt="Club Deportes Limache" width={32} height={32} className="mr-1 shrink-0" />
+
         {allItems.map((item) => (
           <NavLink key={item.href} item={item} horizontal />
         ))}
@@ -88,9 +88,7 @@ export function Sidebar() {
       {/* Desktop: full-height vertical rail */}
       <aside className="hidden h-screen w-60 shrink-0 flex-col gap-1 bg-gradient-to-b from-rojo-oscuro to-rojo-noche px-3 py-4 md:flex">
         <div className="mb-6 flex items-center gap-2 px-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-sm font-bold text-rojo-oscuro shadow-club">
-            CDL
-          </div>
+          <Image src="/escudo-club.png" alt="Club Deportes Limache" width={40} height={40} className="shadow-club" />
           <div>
             <p className="font-display text-base leading-none tracking-wide text-white">Deportes Limache</p>
             <p className="text-[11px] text-white/60">Fútbol Joven</p>

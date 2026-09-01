@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/Button";
@@ -31,9 +32,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[#EDE7E4] to-[#E4DCD8] px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-rojo to-rojo-noche text-base font-bold text-white shadow-club">
-            CDL
-          </div>
+          <Image src="/escudo-club.png" alt="Club Deportes Limache" width={64} height={64} className="mx-auto mb-3 shadow-club" />
           <h1 className="font-display text-2xl tracking-wide text-rojo">Deportes Limache</h1>
           <p className="mt-1 text-sm text-gris">Plataforma de gestión y desarrollo del fútbol formativo</p>
         </div>
