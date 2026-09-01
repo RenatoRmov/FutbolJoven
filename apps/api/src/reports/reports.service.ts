@@ -3,12 +3,17 @@ import { computeNotaFinal, computeTalentStatus, PERMISSIONS, TALENT_STATUS_LABEL
 import type { TalentStatus } from "@futboljoven/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { assertTeamInScope } from "../common/scope.util";
+import { EvaluationsService } from "../evaluations/evaluations.service";
 import type { AuthenticatedUser } from "../auth/auth.types";
-import { addHeader, addSignatureBlock, COLORS, drawBar, ensureSpace, fullWidthText, renderPdfToBuffer, sectionTitle, STATUS_COLORS } from "./pdf.util";
+import { addHeader, addSignatureBlock, COLORS, drawBar, drawRadarChart, ensureSpace, fullWidthText, renderPdfToBuffer, sectionTitle, STATUS_COLORS } from "./pdf.util";
+import type { RadarAxis } from "./pdf.util";
 
 @Injectable()
 export class ReportsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private evaluationsService: EvaluationsService,
+  ) {}
 
   async buildPlayerReportPdf(user: AuthenticatedUser, playerId: string): Promise<Buffer> {
     const player = await this.prisma.player.findUnique({
@@ -22,8 +27,7 @@ export class ReportsService {
       throw new NotFoundException("Jugador no encontrado");
     }
 
-    const [dimensions, evaluations, appearances, latestInjury] = await Promise.all([
-      this.prisma.evaluationDimension.findMany({ where: { isActive: true }, orderBy: { order: "asc" } }),
+    const [evaluations, appearances, latestInjury, evolution] = await Promise.all([
       this.prisma.evaluation.findMany({
         where: { playerId },
         include: { scores: { include: { dimension: true } } },
@@ -35,7 +39,16 @@ export class ReportsService {
         orderBy: { match: { date: "desc" } },
       }),
       this.prisma.injury.findFirst({ where: { playerId }, orderBy: { date: "desc" } }),
+      this.evaluationsService.getPlayerEvolution(user, playerId),
     ]);
+
+    // Same series as the "Radar de habilidades" card on the web player profile.
+    const radarAxes: RadarAxis[] = evolution.radar.map((r, i) => ({
+      label: r.dimensionName,
+      current: r.value,
+      previous: evolution.previousRadar[i]?.value ?? null,
+      teamAverage: evolution.teamAverageRadar[i]?.value ?? null,
+    }));
 
     const scoredEvaluations = evaluations.map((ev) => {
       const byDimension = new Map<string, { weight: number; values: number[] }>();
@@ -74,13 +87,9 @@ export class ReportsService {
       fullWidthText(doc, `Nota Final: ${latest?.notaFinal ?? "—"}   Estatus: ${latest?.estatus ? TALENT_STATUS_LABELS[latest.estatus as TalentStatus] : "Sin evaluar"}   Aptitud médica: ${aptitud}`);
       doc.moveDown(0.5);
 
-      if (latest) {
-        sectionTitle(doc, "Desglose por dimensión (última evaluación)");
-        for (const dim of dimensions) {
-          const entry = latest.byDimension.get(dim.id);
-          const avg = entry ? entry.values.reduce((a, b) => a + b, 0) / entry.values.length : null;
-          drawBar(doc, dim.name, avg, 10);
-        }
+      if (radarAxes.some((a) => a.current !== null)) {
+        sectionTitle(doc, "Radar de habilidades");
+        drawRadarChart(doc, radarAxes);
       }
 
       sectionTitle(doc, "Historial de Notas Técnicas");
