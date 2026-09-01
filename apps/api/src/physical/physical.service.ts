@@ -60,4 +60,40 @@ export class PhysicalService {
     await this.audit.record({ userId, action: "UPDATE", entityType: "Injury", entityId: id, oldValue: before, newValue: injury });
     return injury;
   }
+
+  /** "Médica" page — every active player across categories with their current aptitud, for a club-wide filterable list. */
+  async getMedicalStatusList() {
+    const [players, injuries] = await Promise.all([
+      this.prisma.player.findMany({
+        where: { status: "ACTIVE" },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          currentTeam: { select: { category: { select: { id: true, name: true } } } },
+        },
+        orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      }),
+      this.prisma.injury.findMany({ orderBy: { date: "desc" } }),
+    ]);
+
+    const latestInjuryByPlayer = new Map<string, (typeof injuries)[number]>();
+    for (const injury of injuries) {
+      if (!latestInjuryByPlayer.has(injury.playerId)) latestInjuryByPlayer.set(injury.playerId, injury);
+    }
+
+    return players.map((p) => {
+      const injury = latestInjuryByPlayer.get(p.id);
+      const aptitud = injury?.status === "ACTIVE" ? "NO_APTO" : injury?.status === "RECOVERING" ? "EN_REINTEGRO" : "APTO";
+      return {
+        id: p.id,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        categoryId: p.currentTeam?.category?.id ?? null,
+        categoryName: p.currentTeam?.category?.name ?? "Sin categoría",
+        aptitud,
+        lastInjury: injury ? { description: injury.description, date: injury.date, status: injury.status } : null,
+      };
+    });
+  }
 }

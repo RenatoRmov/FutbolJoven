@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Input, Select } from "@/components/ui/Input";
@@ -12,6 +13,7 @@ import { api } from "@/lib/api-client";
 import { calculateAge, Category, Player, POSITION_LABELS, STATUS_LABELS, STATUS_TONE, Team } from "@/lib/types";
 
 export default function PlayersPage() {
+  const searchParams = useSearchParams();
   const [players, setPlayers] = useState<Player[] | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -24,6 +26,11 @@ export default function PlayersPage() {
     api.get<Category[]>("/categories").then(setCategories);
     api.get<Team[]>("/teams").then(setTeams);
   }, []);
+
+  // Re-sync when the sidebar links to a different category while already on this page.
+  useEffect(() => {
+    setCategoryId(searchParams.get("categoryId") ?? "");
+  }, [searchParams]);
 
   useEffect(() => {
     setLoading(true);

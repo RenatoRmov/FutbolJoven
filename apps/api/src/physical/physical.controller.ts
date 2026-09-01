@@ -23,6 +23,12 @@ export class PhysicalController {
   }
 
   @RequirePermission(PERMISSIONS.PHYSICAL_VIEW)
+  @Get("physical/medical-status")
+  getMedicalStatusList() {
+    return this.physicalService.getMedicalStatusList();
+  }
+
+  @RequirePermission(PERMISSIONS.PHYSICAL_VIEW)
   @Get("injuries/player/:playerId")
   findInjuries(@Param("playerId") playerId: string) {
     return this.physicalService.findInjuriesForPlayer(playerId);
