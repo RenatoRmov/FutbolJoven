@@ -10,8 +10,11 @@ export class CategoriesService {
     private audit: AuditService,
   ) {}
 
-  findAll() {
-    return this.prisma.category.findMany({ orderBy: { order: "asc" } });
+  findAll(includeInactive = false) {
+    return this.prisma.category.findMany({
+      where: includeInactive ? {} : { isActive: true },
+      orderBy: { order: "asc" },
+    });
   }
 
   async findOne(id: string) {

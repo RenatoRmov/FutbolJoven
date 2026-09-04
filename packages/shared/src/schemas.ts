@@ -10,19 +10,20 @@ export const playerStatusEnum = z.enum(["ACTIVE", "INJURED", "SUSPENDED", "INACT
 export const dominantFootEnum = z.enum(["LEFT", "RIGHT", "BOTH"]);
 export const playerGenderEnum = z.enum(["MALE", "FEMALE"]);
 export const playerPositionEnum = z.enum([
-  "PORTERO",
+  "ARQUERO",
   "LATERAL_DERECHO",
   "LATERAL_IZQUIERDO",
-  "DEFENSA_CENTRAL",
-  "MEDIOCENTRO",
-  "VOLANTE",
-  "VOLANTE_OFENSIVO",
+  "DEFENSA_CENTRAL_DERECHO",
+  "DEFENSA_CENTRAL_IZQUIERDO",
+  "VOLANTE_CENTRAL",
   "VOLANTE_MIXTO",
+  "VOLANTE_OFENSIVO",
+  "DELANTERO_CENTRO",
   "EXTREMO_DERECHO",
   "EXTREMO_IZQUIERDO",
-  "DELANTERO_CENTRO",
-  "DELANTERO",
 ]);
+
+export const healthSystemEnum = z.enum(["FONASA", "ISAPRE", "OTHER"]);
 
 export const createPlayerSchema = z.object({
   firstName: z.string().min(1).max(80),
@@ -44,6 +45,31 @@ export const createPlayerSchema = z.object({
   weight: z.coerce.number().positive().max(200).optional().nullable(),
   status: playerStatusEnum.optional().default("ACTIVE"),
   notes: z.string().max(4000).optional().nullable(),
+
+  // "Ficha del Jugador" — contacto directo.
+  phone: z.string().max(40).optional().nullable(),
+  email: z.string().email().max(120).optional().nullable().or(z.literal("")),
+  address: z.string().max(300).optional().nullable(),
+
+  // Información de salud.
+  healthSystem: healthSystemEnum.optional().nullable(),
+  isapreName: z.string().max(120).optional().nullable(),
+  fonasaTramo: z.string().max(40).optional().nullable(),
+
+  // Antecedentes médicos.
+  allergies: z.string().max(1000).optional().nullable(),
+  chronicDiseases: z.string().max(1000).optional().nullable(),
+  permanentMedications: z.string().max(1000).optional().nullable(),
+  relevantPreviousInjuries: z.string().max(1000).optional().nullable(),
+  bloodType: z.string().max(10).optional().nullable(),
+  medicalObservations: z.string().max(2000).optional().nullable(),
+
+  // Contacto de emergencia.
+  emergencyContactName: z.string().max(150).optional().nullable(),
+  emergencyContactRelationship: z.string().max(80).optional().nullable(),
+  emergencyContactPhone: z.string().max(40).optional().nullable(),
+  emergencyContactPhoneAlt: z.string().max(40).optional().nullable(),
+  emergencyContactAddress: z.string().max(300).optional().nullable(),
 });
 export type CreatePlayerDto = z.infer<typeof createPlayerSchema>;
 
@@ -158,9 +184,12 @@ export type CreateNutritionRecordDto = z.infer<typeof createNutritionRecordSchem
 // Physical batteries & injuries
 // ---------------------------------------------------------------------------
 
+export const physicalRecordTypeEnum = z.enum(["ANTHROPOMETRIC", "PERFORMANCE"]);
+
 export const createPhysicalRecordSchema = z.object({
   playerId: z.string().uuid(),
   date: z.coerce.date(),
+  recordType: physicalRecordTypeEnum.optional().default("ANTHROPOMETRIC"),
   metrics: z.record(z.string(), z.union([z.string(), z.number()])),
   observations: z.string().max(2000).optional().nullable(),
 });
@@ -172,9 +201,12 @@ export const injurySeverityEnum = z.enum(["MILD", "MODERATE", "SEVERE"]);
 export const createInjurySchema = z.object({
   playerId: z.string().uuid(),
   description: z.string().min(1).max(300),
+  injuryType: z.string().max(150).optional().nullable(),
   bodyPart: z.string().max(100).optional().nullable(),
   date: z.coerce.date(),
   severity: injurySeverityEnum.optional().nullable(),
+  responsibleProfessional: z.string().max(150).optional().nullable(),
+  treatment: z.string().max(1000).optional().nullable(),
   expectedRecoveryDays: z.coerce.number().int().min(0).max(730).optional().nullable(),
   actualReturnDate: z.coerce.date().optional().nullable(),
   status: injuryStatusEnum.optional().default("ACTIVE"),
@@ -213,6 +245,7 @@ export const createMatchSchema = z.object({
   date: z.coerce.date(),
   kickoffTime: z.string().max(20).optional().nullable(),
   meetingTime: z.string().max(20).optional().nullable(),
+  city: z.string().max(80).optional().nullable(),
   venue: z.string().max(150).optional().nullable(),
   isHome: z.boolean().optional().default(true),
   coachName: z.string().max(150).optional().nullable(),
@@ -220,6 +253,12 @@ export const createMatchSchema = z.object({
   kineName: z.string().max(150).optional().nullable(),
   equipmentManagerName: z.string().max(150).optional().nullable(),
   otherStaffNotes: z.string().max(500).optional().nullable(),
+  // Traslados / alojamiento — solo relevantes cuando isHome = false.
+  techStaffArrivalTime: z.string().max(20).optional().nullable(),
+  playersArrivalTime: z.string().max(20).optional().nullable(),
+  busDepartureTime: z.string().max(20).optional().nullable(),
+  meetingPoint: z.string().max(200).optional().nullable(),
+  hotelNameAddress: z.string().max(300).optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
 });
 export type CreateMatchDto = z.infer<typeof createMatchSchema>;

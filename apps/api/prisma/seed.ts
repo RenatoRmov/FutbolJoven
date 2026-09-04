@@ -59,8 +59,8 @@ const PERMISSION_DESCRIPTIONS: Record<string, string> = {
 };
 
 // Category structure mirrors a real formative-football club: men's pathway
-// Sub-13 to Sub-20, a women's category spanning a broader age
-// band, and Primer Equipo as the professional destination.
+// Sub-13 to Sub-20 and a women's category spanning a broader age band.
+// ("Primer Equipo" was retired in Fase 4 — see bootstrap.ts RETIRED_CATEGORY_NAMES.)
 const CATEGORY_DEFS = [
   { name: "Sub-13", order: 1, minAge: 12, maxAge: 13, gender: "MALE" as const },
   { name: "Sub-14", order: 2, minAge: 13, maxAge: 14, gender: "MALE" as const },
@@ -69,28 +69,25 @@ const CATEGORY_DEFS = [
   { name: "Sub-18", order: 5, minAge: 16, maxAge: 18, gender: "MALE" as const },
   { name: "Sub-20", order: 6, minAge: 18, maxAge: 20, gender: "MALE" as const },
   { name: "Femenina Juvenil", order: 7, minAge: 13, maxAge: 21, gender: "FEMALE" as const },
-  { name: "Primer Equipo", order: 8, minAge: 17, maxAge: 40, gender: "MALE" as const },
 ];
 
 // Weighted so goalkeepers stay rare, like a real squad (~1 in 12).
 const POSITION_POOL = [
-  "PORTERO",
+  "ARQUERO",
   "LATERAL_DERECHO",
   "LATERAL_IZQUIERDO",
   "LATERAL_IZQUIERDO",
-  "DEFENSA_CENTRAL",
-  "DEFENSA_CENTRAL",
-  "DEFENSA_CENTRAL",
-  "MEDIOCENTRO",
-  "MEDIOCENTRO",
-  "MEDIOCENTRO",
-  "VOLANTE",
+  "DEFENSA_CENTRAL_DERECHO",
+  "DEFENSA_CENTRAL_IZQUIERDO",
+  "DEFENSA_CENTRAL_IZQUIERDO",
+  "VOLANTE_CENTRAL",
+  "VOLANTE_CENTRAL",
+  "VOLANTE_CENTRAL",
   "VOLANTE_OFENSIVO",
   "VOLANTE_MIXTO",
   "EXTREMO_DERECHO",
   "EXTREMO_IZQUIERDO",
   "DELANTERO_CENTRO",
-  "DELANTERO",
 ];
 
 function pick<T>(arr: T[]): T {

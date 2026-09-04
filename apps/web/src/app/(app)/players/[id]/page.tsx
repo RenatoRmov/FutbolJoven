@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { PERMISSIONS } from "@futboljoven/shared";
 import { Header } from "@/components/layout/Header";
@@ -107,7 +108,12 @@ export default function PlayerProfilePage() {
     <div>
       <Header title={`${player.firstName} ${player.lastName}`} />
       <div className="space-y-6 p-6">
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Link href={`/player-profile?playerId=${player.id}`}>
+            <Button variant="secondary" size="sm">
+              Editar ficha completa
+            </Button>
+          </Link>
           <Button
             variant="secondary"
             size="sm"

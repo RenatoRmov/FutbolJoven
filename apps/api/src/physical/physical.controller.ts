@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { createInjurySchema, createPhysicalRecordSchema, PERMISSIONS, updateInjurySchema } from "@futboljoven/shared";
 import { RequirePermission } from "../auth/decorators/require-permission.decorator";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
@@ -12,8 +12,8 @@ export class PhysicalController {
 
   @RequirePermission(PERMISSIONS.PHYSICAL_VIEW)
   @Get("physical/player/:playerId")
-  findRecords(@Param("playerId") playerId: string) {
-    return this.physicalService.findRecordsForPlayer(playerId);
+  findRecords(@Param("playerId") playerId: string, @Query("recordType") recordType?: string) {
+    return this.physicalService.findRecordsForPlayer(playerId, recordType);
   }
 
   @RequirePermission(PERMISSIONS.PHYSICAL_MANAGE)

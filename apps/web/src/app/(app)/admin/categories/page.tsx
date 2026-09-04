@@ -20,7 +20,7 @@ export default function CategoriesAdminPage() {
   const [saving, setSaving] = useState(false);
 
   function load() {
-    api.get<Category[]>("/categories").then(setCategories);
+    api.get<Category[]>("/categories?includeInactive=true").then(setCategories);
   }
 
   useEffect(load, []);

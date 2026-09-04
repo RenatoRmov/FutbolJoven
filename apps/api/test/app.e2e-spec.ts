@@ -510,4 +510,83 @@ describe("FutbolJoven API (e2e)", () => {
       expect(res.status).toBe(403);
     });
   });
+
+  describe("Fase 4 — Ficha del Jugador, posiciones, lesiones, rendimiento físico", () => {
+    it("creates a player with the new Ficha del Jugador fields and the new grouped position taxonomy", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/api/players")
+        .set("Cookie", adminCookie)
+        .send({
+          firstName: "Ficha",
+          lastName: "Completa",
+          birthDate: "2011-02-02",
+          joinDate: "2026-01-01",
+          teamId: teamAId,
+          primaryPosition: "DEFENSA_CENTRAL_DERECHO",
+          phone: "+56911111111",
+          email: "ficha.completa@test.local",
+          address: "Calle Falsa 123",
+          healthSystem: "ISAPRE",
+          isapreName: "Test Isapre",
+          allergies: "Ninguna",
+          bloodType: "O+",
+          emergencyContactName: "Contacto Emergencia",
+          emergencyContactRelationship: "Madre",
+          emergencyContactPhone: "+56922222222",
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.primaryPosition).toBe("DEFENSA_CENTRAL_DERECHO");
+      expect(res.body.healthSystem).toBe("ISAPRE");
+      expect(res.body.emergencyContactName).toBe("Contacto Emergencia");
+
+      const getRes = await request(app.getHttpServer()).get(`/api/players/${res.body.id}`).set("Cookie", adminCookie);
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.primaryPosition).toBe("DEFENSA_CENTRAL_DERECHO");
+      expect(getRes.body.email).toBe("ficha.completa@test.local");
+    });
+
+    it("generates the physical performance PDF as its own separate document", async () => {
+      await request(app.getHttpServer())
+        .post("/api/physical")
+        .set("Cookie", physicalTrainerCookie)
+        .send({ playerId: playerAId, date: "2026-05-01", recordType: "PERFORMANCE", metrics: { sj: 30, cmj: 32, vift: 15.5 } });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/reports/players/${playerAId}/physical-performance-pdf`)
+        .set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toBe("application/pdf");
+      expect(Buffer.isBuffer(res.body) || res.body instanceof Uint8Array).toBe(true);
+    });
+
+    it("only includes the injury history section in the player PDF once an injury exists", async () => {
+      const beforeRes = await request(app.getHttpServer()).get(`/api/reports/players/${playerAId}/pdf`).set("Cookie", adminCookie);
+      expect(beforeRes.status).toBe(200);
+      const beforeSize = beforeRes.body.length;
+
+      const injuryRes = await request(app.getHttpServer())
+        .post("/api/injuries")
+        .set("Cookie", physicalTrainerCookie)
+        .send({
+          playerId: playerAId,
+          description: "Esguince de tobillo",
+          injuryType: "Esguince",
+          bodyPart: "Tobillo",
+          date: "2026-05-01",
+          severity: "MODERATE",
+          responsibleProfessional: "Kinesiólogo Test",
+          treatment: "Reposo y kinesiología",
+          expectedRecoveryDays: 14,
+          actualReturnDate: "2026-05-15",
+          status: "CLEARED",
+        });
+      expect(injuryRes.status).toBe(201);
+
+      const afterRes = await request(app.getHttpServer()).get(`/api/reports/players/${playerAId}/pdf`).set("Cookie", adminCookie);
+      expect(afterRes.status).toBe(200);
+      // The injury history section adds a bar chart + text block; a compressed PDF with it
+      // present is meaningfully larger than the same report without any injuries.
+      expect(afterRes.body.length).toBeGreaterThan(beforeSize);
+    });
+  });
 });

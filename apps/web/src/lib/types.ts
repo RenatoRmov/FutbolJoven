@@ -1,5 +1,7 @@
 import type { PlayerPosition, TalentStatus } from "@futboljoven/shared";
-import { PLAYER_GENDER_LABELS, PLAYER_POSITION_LABELS, TALENT_STATUS_LABELS } from "@futboljoven/shared";
+import { PLAYER_GENDER_LABELS, PLAYER_POSITION_LABELS, TALENT_STATUS_LABELS, HEALTH_SYSTEM_LABELS, POSITION_GROUPS, POSITION_GROUP_LABELS, groupForPosition } from "@futboljoven/shared";
+
+export { HEALTH_SYSTEM_LABELS, POSITION_GROUPS, POSITION_GROUP_LABELS, groupForPosition };
 
 export interface Category {
   id: string;
@@ -51,6 +53,24 @@ export interface Player {
   weight: number | null;
   status: string;
   notes: string | null;
+  documentId: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  healthSystem: string | null;
+  isapreName: string | null;
+  fonasaTramo: string | null;
+  allergies: string | null;
+  chronicDiseases: string | null;
+  permanentMedications: string | null;
+  relevantPreviousInjuries: string | null;
+  bloodType: string | null;
+  medicalObservations: string | null;
+  emergencyContactName: string | null;
+  emergencyContactRelationship: string | null;
+  emergencyContactPhone: string | null;
+  emergencyContactPhoneAlt: string | null;
+  emergencyContactAddress: string | null;
   secondaryPositions?: { position: string }[];
   teamHistory?: {
     id: string;

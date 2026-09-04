@@ -83,11 +83,17 @@ const CATEGORY_DEFS = [
   { name: "Sub-18", order: 5, minAge: 16, maxAge: 18, gender: "MALE" as const },
   { name: "Sub-20", order: 6, minAge: 18, maxAge: 20, gender: "MALE" as const },
   { name: "Femenina Juvenil", order: 7, minAge: 13, maxAge: 21, gender: "FEMALE" as const },
-  { name: "Primer Equipo", order: 8, minAge: 17, maxAge: 40, gender: "MALE" as const },
 ];
+
+// "Primer Equipo" was retired (Fase 4, ítem 1) — never had players in
+// production, so deactivating instead of deleting (Team.category is
+// onDelete: Restrict) is enough to hide it everywhere without any data risk.
+const RETIRED_CATEGORY_NAMES = ["Primer Equipo"];
 
 async function main() {
   console.log("Bootstrapping FutbolJoven production data (no demo players)...");
+
+  await prisma.category.updateMany({ where: { name: { in: RETIRED_CATEGORY_NAMES } }, data: { isActive: false } });
 
   const club = await prisma.club.upsert({
     where: { id: "00000000-0000-0000-0000-000000000000" },

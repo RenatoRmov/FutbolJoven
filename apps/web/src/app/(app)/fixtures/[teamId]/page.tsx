@@ -18,6 +18,7 @@ interface Match {
   date: string;
   kickoffTime: string | null;
   meetingTime: string | null;
+  city: string | null;
   venue: string | null;
   isHome: boolean;
   coachName: string | null;
@@ -25,6 +26,11 @@ interface Match {
   kineName: string | null;
   equipmentManagerName: string | null;
   otherStaffNotes: string | null;
+  techStaffArrivalTime: string | null;
+  playersArrivalTime: string | null;
+  busDepartureTime: string | null;
+  meetingPoint: string | null;
+  hotelNameAddress: string | null;
   status: string;
   teamScore: number | null;
   opponentScore: number | null;
@@ -43,6 +49,7 @@ const emptyForm = {
   date: new Date().toISOString().slice(0, 10),
   kickoffTime: "",
   meetingTime: "",
+  city: "",
   venue: "",
   isHome: "true",
   coachName: "",
@@ -50,6 +57,11 @@ const emptyForm = {
   kineName: "",
   equipmentManagerName: "",
   otherStaffNotes: "",
+  techStaffArrivalTime: "",
+  playersArrivalTime: "",
+  busDepartureTime: "",
+  meetingPoint: "",
+  hotelNameAddress: "",
 };
 
 export default function TeamFixturePage() {
@@ -91,6 +103,7 @@ export default function TeamFixturePage() {
         date: form.date,
         kickoffTime: form.kickoffTime || null,
         meetingTime: form.meetingTime || null,
+        city: form.city || null,
         venue: form.venue || null,
         isHome: form.isHome === "true",
         coachName: form.coachName || null,
@@ -98,6 +111,15 @@ export default function TeamFixturePage() {
         kineName: form.kineName || null,
         equipmentManagerName: form.equipmentManagerName || null,
         otherStaffNotes: form.otherStaffNotes || null,
+        ...(form.isHome === "false"
+          ? {
+              techStaffArrivalTime: form.techStaffArrivalTime || null,
+              playersArrivalTime: form.playersArrivalTime || null,
+              busDepartureTime: form.busDepartureTime || null,
+              meetingPoint: form.meetingPoint || null,
+              hotelNameAddress: form.hotelNameAddress || null,
+            }
+          : {}),
       });
       setForm(emptyForm);
       load();
@@ -157,6 +179,10 @@ export default function TeamFixturePage() {
                 <Input type="time" value={form.kickoffTime} onChange={(e) => setForm({ ...form, kickoffTime: e.target.value })} />
               </div>
               <div>
+                <Label>Ciudad</Label>
+                <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+              </div>
+              <div>
                 <Label>Estadio</Label>
                 <Input value={form.venue} onChange={(e) => setForm({ ...form, venue: e.target.value })} />
               </div>
@@ -180,6 +206,34 @@ export default function TeamFixturePage() {
                 <Label>Otros</Label>
                 <Input value={form.otherStaffNotes} onChange={(e) => setForm({ ...form, otherStaffNotes: e.target.value })} />
               </div>
+
+              {form.isHome === "false" && (
+                <>
+                  <p className="md:col-span-3 mt-2 font-display text-sm tracking-wide text-rojo-oscuro">Traslados</p>
+                  <div>
+                    <Label>Hora presentación cuerpo técnico</Label>
+                    <Input type="time" value={form.techStaffArrivalTime} onChange={(e) => setForm({ ...form, techStaffArrivalTime: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Hora presentación jugadores</Label>
+                    <Input type="time" value={form.playersArrivalTime} onChange={(e) => setForm({ ...form, playersArrivalTime: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Hora de salida del bus</Label>
+                    <Input type="time" value={form.busDepartureTime} onChange={(e) => setForm({ ...form, busDepartureTime: e.target.value })} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Punto de encuentro</Label>
+                    <Input value={form.meetingPoint} onChange={(e) => setForm({ ...form, meetingPoint: e.target.value })} />
+                  </div>
+                  <p className="md:col-span-3 mt-1 font-display text-sm tracking-wide text-rojo-oscuro">Alojamiento</p>
+                  <div className="md:col-span-3">
+                    <Label>Nombre y dirección del hotel</Label>
+                    <Input value={form.hotelNameAddress} onChange={(e) => setForm({ ...form, hotelNameAddress: e.target.value })} />
+                  </div>
+                </>
+              )}
+
               <div className="md:col-span-3">
                 <Button type="submit" disabled={saving}>
                   {saving ? "Guardando..." : "Crear partido"}
@@ -246,8 +300,23 @@ function MatchCard({
               {new Date(match.date).toLocaleDateString("es-AR")}
               {match.meetingTime && ` · Citación ${match.meetingTime}`}
               {match.kickoffTime && ` · Partido ${match.kickoffTime}`}
+              {match.city && ` · ${match.city}`}
               {match.venue && ` · ${match.venue}`}
             </p>
+            {!match.isHome && (match.techStaffArrivalTime || match.playersArrivalTime || match.busDepartureTime || match.meetingPoint || match.hotelNameAddress) && (
+              <p className="mt-1 text-[11px] text-gris">
+                Traslado:
+                {[
+                  match.techStaffArrivalTime && `CT ${match.techStaffArrivalTime}`,
+                  match.playersArrivalTime && `Jugadores ${match.playersArrivalTime}`,
+                  match.busDepartureTime && `Bus ${match.busDepartureTime}`,
+                  match.meetingPoint && `Encuentro: ${match.meetingPoint}`,
+                  match.hotelNameAddress && `Hotel: ${match.hotelNameAddress}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            )}
             {(match.coachName || match.physicalTrainerName || match.kineName || match.equipmentManagerName) && (
               <p className="mt-1 text-[11px] text-gris">
                 {[match.coachName && `DT: ${match.coachName}`, match.physicalTrainerName && `PF: ${match.physicalTrainerName}`, match.kineName && `Kine: ${match.kineName}`, match.equipmentManagerName && `Utilero: ${match.equipmentManagerName}`]
@@ -316,7 +385,7 @@ function ResultForm({ matchId, players, onSaved }: { matchId: string; players: P
         })
         .filter((a): a is NonNullable<typeof a> => a !== null);
 
-      if (appearances.length === 0) throw new ApiError(400, "Cargá al menos un jugador con minutos o titular");
+      if (appearances.length === 0) throw new ApiError(400, "Cargá al menos un jugador con minutos o citado");
 
       await api.post(`/fixtures/${matchId}/result`, { teamScore: Number(teamScore), opponentScore: Number(opponentScore), appearances });
       onSaved();
@@ -345,7 +414,7 @@ function ResultForm({ matchId, players, onSaved }: { matchId: string; players: P
           <thead>
             <tr className="text-left text-gris">
               <th className="py-1 pr-2">Jugador</th>
-              <th className="px-2">Titular</th>
+              <th className="px-2">Citado</th>
               <th className="px-2">Minutos</th>
               <th className="px-2">Goles</th>
               <th className="px-2">Amarillas</th>

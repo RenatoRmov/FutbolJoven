@@ -85,6 +85,11 @@ function minutesToScore(minutes: number): number {
   return Math.max(0, Math.min(10, minutes / 9));
 }
 
+// El punteo del club solo distingue Partido/Entrenamiento en la carga rápida
+// ("Período" sigue existiendo en el enum compartido para no romper el label
+// de evaluaciones históricas que ya lo usan, pero no se ofrece acá).
+const QUICK_EVAL_TYPES = EVALUATION_TYPES.filter((t) => t.value === "MATCH" || t.value === "TRAINING");
+
 export default function QuickEvaluationPage() {
   const params = useParams<{ teamId: string }>();
   const router = useRouter();
@@ -180,26 +185,35 @@ export default function QuickEvaluationPage() {
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gris">Tipo</label>
-              <Select value={type} onChange={(e) => setType(e.target.value)} className="w-44">
-                {EVALUATION_TYPES.map((t) => (
+              <Select
+                value={type}
+                onChange={(e) => {
+                  setType(e.target.value);
+                  if (e.target.value !== "MATCH") setContext("");
+                }}
+                className="w-44"
+              >
+                {QUICK_EVAL_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>
                     {t.label}
                   </option>
                 ))}
               </Select>
             </div>
-            <div className="flex-1 min-w-[220px]">
-              <label className="mb-1 block text-xs font-medium text-gris">Contexto (partido del fixture)</label>
-              <Select value={context} onChange={(e) => setContext(e.target.value)}>
-                <option value="">Sin partido asociado</option>
-                {matches.map((m) => (
-                  <option key={m.id} value={`${new Date(m.date).toLocaleDateString("es-CL")} ${m.isHome ? "vs" : "@"} ${m.opponent}`}>
-                    {new Date(m.date).toLocaleDateString("es-CL")} {m.isHome ? "vs" : "@"} {m.opponent}
-                    {m.status === "SCHEDULED" ? " (programado)" : m.status === "PLAYED" ? " (jugado)" : ""}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            {type === "MATCH" && (
+              <div className="flex-1 min-w-[220px]">
+                <label className="mb-1 block text-xs font-medium text-gris">Contexto (partido del fixture)</label>
+                <Select value={context} onChange={(e) => setContext(e.target.value)}>
+                  <option value="">Sin partido asociado</option>
+                  {matches.map((m) => (
+                    <option key={m.id} value={`${new Date(m.date).toLocaleDateString("es-CL")} ${m.isHome ? "vs" : "@"} ${m.opponent}`}>
+                      {new Date(m.date).toLocaleDateString("es-CL")} {m.isHome ? "vs" : "@"} {m.opponent}
+                      {m.status === "SCHEDULED" ? " (programado)" : m.status === "PLAYED" ? " (jugado)" : ""}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
             <Button onClick={handleSubmit} disabled={saving || !players || players.length === 0}>
               {saving ? "Guardando..." : "Guardar evaluaciones"}
             </Button>

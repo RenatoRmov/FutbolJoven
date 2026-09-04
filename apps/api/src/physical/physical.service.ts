@@ -10,9 +10,9 @@ export class PhysicalService {
     private audit: AuditService,
   ) {}
 
-  async findRecordsForPlayer(playerId: string) {
+  async findRecordsForPlayer(playerId: string, recordType?: string) {
     const records = await this.prisma.physicalRecord.findMany({
-      where: { playerId },
+      where: { playerId, ...(recordType ? { recordType } : {}) },
       include: { recordedBy: { select: { firstName: true, lastName: true } } },
       orderBy: { date: "desc" },
     });
@@ -27,6 +27,7 @@ export class PhysicalService {
       data: {
         playerId: dto.playerId,
         date: dto.date,
+        recordType: dto.recordType ?? "ANTHROPOMETRIC",
         metrics: JSON.stringify(dto.metrics),
         observations: dto.observations ?? null,
         recordedById: userId,

@@ -50,7 +50,7 @@ export function PhysicalHealthTab({ playerId }: { playerId: string }) {
   const canManage = hasPermission(PERMISSIONS.PHYSICAL_MANAGE);
 
   function load() {
-    api.get<PhysicalRecord[]>(`/physical/player/${playerId}`).then(setRecords);
+    api.get<PhysicalRecord[]>(`/physical/player/${playerId}?recordType=PERFORMANCE`).then(setRecords);
     api.get<Injury[]>(`/injuries/player/${playerId}`).then(setInjuries);
   }
 
@@ -65,7 +65,7 @@ export function PhysicalHealthTab({ playerId }: { playerId: string }) {
       for (const [key, value] of Object.entries(batteryForm)) {
         if (value) metrics[key] = Number(value);
       }
-      await api.post("/physical", { playerId, date: new Date().toISOString().slice(0, 10), metrics });
+      await api.post("/physical", { playerId, date: new Date().toISOString().slice(0, 10), recordType: "PERFORMANCE", metrics });
       setBatteryForm({ resistencia: "", velocidad: "", fuerza: "", agilidad: "", potencia: "" });
       load();
     } catch (err) {

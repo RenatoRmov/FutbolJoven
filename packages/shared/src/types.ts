@@ -24,37 +24,68 @@ export const PLAYER_GENDER_LABELS: Record<PlayerGender, string> = {
 };
 
 /**
- * Real position taxonomy used by the club's own roster/evaluation
- * spreadsheets (Spanish, position-specific rather than a generic
- * English set).
+ * Real position taxonomy used by the club, grouped into 4 families
+ * (Arquero/Defensa/Volantes/Delanteros) so the UI can offer a cascading
+ * select: pick the family first, then the exact position within it.
  */
 export type PlayerPosition =
-  | "PORTERO"
+  | "ARQUERO"
   | "LATERAL_DERECHO"
   | "LATERAL_IZQUIERDO"
-  | "DEFENSA_CENTRAL"
-  | "MEDIOCENTRO"
-  | "VOLANTE"
-  | "VOLANTE_OFENSIVO"
+  | "DEFENSA_CENTRAL_DERECHO"
+  | "DEFENSA_CENTRAL_IZQUIERDO"
+  | "VOLANTE_CENTRAL"
   | "VOLANTE_MIXTO"
-  | "EXTREMO_DERECHO"
-  | "EXTREMO_IZQUIERDO"
+  | "VOLANTE_OFENSIVO"
   | "DELANTERO_CENTRO"
-  | "DELANTERO";
+  | "EXTREMO_DERECHO"
+  | "EXTREMO_IZQUIERDO";
 
 export const PLAYER_POSITION_LABELS: Record<PlayerPosition, string> = {
-  PORTERO: "Portero",
+  ARQUERO: "Arquero",
   LATERAL_DERECHO: "Lateral derecho",
   LATERAL_IZQUIERDO: "Lateral izquierdo",
-  DEFENSA_CENTRAL: "Defensa central",
-  MEDIOCENTRO: "Mediocentro",
-  VOLANTE: "Volante",
-  VOLANTE_OFENSIVO: "Volante ofensivo",
+  DEFENSA_CENTRAL_DERECHO: "Defensa central derecho",
+  DEFENSA_CENTRAL_IZQUIERDO: "Defensa central izquierdo",
+  VOLANTE_CENTRAL: "Volante central",
   VOLANTE_MIXTO: "Volante mixto",
+  VOLANTE_OFENSIVO: "Volante ofensivo",
+  DELANTERO_CENTRO: "Delantero centro",
   EXTREMO_DERECHO: "Extremo derecho",
   EXTREMO_IZQUIERDO: "Extremo izquierdo",
-  DELANTERO_CENTRO: "Delantero centro",
-  DELANTERO: "Delantero",
+};
+
+export type PositionGroup = "ARQUERO" | "DEFENSA" | "VOLANTES" | "DELANTEROS";
+
+export const POSITION_GROUP_LABELS: Record<PositionGroup, string> = {
+  ARQUERO: "Arquero",
+  DEFENSA: "Defensa",
+  VOLANTES: "Volantes / Mediocampistas",
+  DELANTEROS: "Delanteros",
+};
+
+/** Which positions belong to each family, for the cascading Grupo → Posición select. */
+export const POSITION_GROUPS: Record<PositionGroup, PlayerPosition[]> = {
+  ARQUERO: ["ARQUERO"],
+  DEFENSA: ["LATERAL_DERECHO", "LATERAL_IZQUIERDO", "DEFENSA_CENTRAL_DERECHO", "DEFENSA_CENTRAL_IZQUIERDO"],
+  VOLANTES: ["VOLANTE_CENTRAL", "VOLANTE_MIXTO", "VOLANTE_OFENSIVO"],
+  DELANTEROS: ["DELANTERO_CENTRO", "EXTREMO_DERECHO", "EXTREMO_IZQUIERDO"],
+};
+
+export function groupForPosition(position: PlayerPosition | string | null | undefined): PositionGroup | null {
+  if (!position) return null;
+  for (const [group, positions] of Object.entries(POSITION_GROUPS) as [PositionGroup, PlayerPosition[]][]) {
+    if (positions.includes(position as PlayerPosition)) return group;
+  }
+  return null;
+}
+
+export type HealthSystem = "FONASA" | "ISAPRE" | "OTHER";
+
+export const HEALTH_SYSTEM_LABELS: Record<HealthSystem, string> = {
+  FONASA: "FONASA",
+  ISAPRE: "ISAPRE",
+  OTHER: "Otro",
 };
 
 export type UserStatus = "ACTIVE" | "DISABLED";

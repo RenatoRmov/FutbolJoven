@@ -22,13 +22,14 @@ const topNav: NavItem[] = [
   { href: "/players", label: "Jugadores", perms: [PERMISSIONS.PLAYERS_VIEW_ALL, PERMISSIONS.PLAYERS_VIEW_ASSIGNED] },
   { href: "/medical", label: "Médica", perms: [PERMISSIONS.PHYSICAL_VIEW, PERMISSIONS.PHYSICAL_MANAGE] },
   { href: "/evaluations", label: "Evaluaciones", perms: [PERMISSIONS.EVALUATIONS_VIEW_ALL, PERMISSIONS.EVALUATIONS_VIEW_ASSIGNED] },
+  { href: "/physical-performance", label: "Rendimiento Físico", perms: [PERMISSIONS.PHYSICAL_VIEW, PERMISSIONS.PHYSICAL_MANAGE] },
 ];
 
 const bottomNav: NavItem[] = [
   { href: "/fixtures", label: "Fixture", perms: [PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED] },
   { href: "/finance", label: "Financiero", perms: [PERMISSIONS.FINANCE_VIEW, PERMISSIONS.FINANCE_MANAGE] },
   { href: "/audit", label: "Auditoría", perms: [PERMISSIONS.AUDIT_VIEW] },
-  { href: "/import-export", label: "Importar / Exportar", perms: [PERMISSIONS.DATA_IMPORT, PERMISSIONS.DATA_EXPORT] },
+  { href: "/player-profile", label: "Ficha del Jugador", perms: [PERMISSIONS.PLAYERS_CREATE] },
   { href: "/admin/users", label: "Usuarios", perms: [PERMISSIONS.USERS_MANAGE] },
   { href: "/admin/roles", label: "Roles y permisos", perms: [PERMISSIONS.ROLES_MANAGE] },
 ];

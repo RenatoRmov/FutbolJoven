@@ -106,6 +106,7 @@ model Match {
   date        DateTime
   kickoffTime String? // "hora de partido"
   meetingTime String? // "hora de citación"
+  city        String? // ciudad del partido
   venue       String? // estadio
   isHome      Boolean  @default(true)
 
@@ -114,6 +115,13 @@ model Match {
   kineName             String?
   equipmentManagerName String? // utilero
   otherStaffNotes      String?
+
+  // Traslados / alojamiento — solo aplican cuando isHome = false (partido de visita).
+  techStaffArrivalTime String? // hora de presentación cuerpo técnico
+  playersArrivalTime   String? // hora de presentación de jugadores
+  busDepartureTime     String? // hora de salida del bus
+  meetingPoint         String? // punto de encuentro
+  hotelNameAddress     String? // nombre y dirección del hotel
 
   status        String  @default("SCHEDULED") // SCHEDULED | PLAYED | POSTPONED | CANCELLED
   teamScore     Int?
@@ -138,7 +146,7 @@ model MatchAppearance {
   playerId String
   player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
-  started       Boolean @default(false)
+  started       Boolean @default(false) // "Citado" en la UI — llamado a la nómina del partido
   minutesPlayed Int?
   goals         Int     @default(0)
   yellowCards   Int     @default(0) // 0, 1 or 2
@@ -155,10 +163,12 @@ model MatchAppearance {
 // status: ACTIVE | INJURED | SUSPENDED | INACTIVE | LEFT_CLUB
 // dominantFoot: LEFT | RIGHT | BOTH
 // gender: MALE | FEMALE
-// primaryPosition / PlayerSecondaryPosition.position (real club taxonomy):
-//   PORTERO | LATERAL_DERECHO | LATERAL_IZQUIERDO | DEFENSA_CENTRAL |
-//   MEDIOCENTRO | VOLANTE | VOLANTE_OFENSIVO | VOLANTE_MIXTO |
-//   EXTREMO_DERECHO | EXTREMO_IZQUIERDO | DELANTERO_CENTRO | DELANTERO
+// primaryPosition / PlayerSecondaryPosition.position (real club taxonomy,
+// grouped Arquero/Defensa/Volantes/Delanteros — see POSITION_GROUPS):
+//   ARQUERO | LATERAL_DERECHO | LATERAL_IZQUIERDO | DEFENSA_CENTRAL_DERECHO |
+//   DEFENSA_CENTRAL_IZQUIERDO | VOLANTE_CENTRAL | VOLANTE_MIXTO |
+//   VOLANTE_OFENSIVO | DELANTERO_CENTRO | EXTREMO_DERECHO | EXTREMO_IZQUIERDO
+// healthSystem: FONASA | ISAPRE | OTHER
 // (see packages/shared/src/schemas.ts for the canonical zod enums)
 
 model Player {
@@ -188,6 +198,32 @@ model Player {
   weight          Float?
   status          String  @default("ACTIVE")
   notes           String?
+
+  // "Ficha del Jugador" — contacto directo del jugador.
+  phone   String?
+  email   String?
+  address String?
+
+  // Información de salud — sistema previsional chileno.
+  healthSystem String? // FONASA | ISAPRE | OTHER
+  isapreName   String?
+  fonasaTramo  String?
+
+  // Antecedentes médicos (resumen general del jugador, distinto del
+  // historial de lesiones puntuales en el modelo Injury).
+  allergies                String?
+  chronicDiseases          String?
+  permanentMedications     String?
+  relevantPreviousInjuries String?
+  bloodType                String?
+  medicalObservations      String?
+
+  // Contacto de emergencia.
+  emergencyContactName         String?
+  emergencyContactRelationship String?
+  emergencyContactPhone        String?
+  emergencyContactPhoneAlt     String?
+  emergencyContactAddress      String?
 
   isDemo    Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -475,31 +511,39 @@ model PhysicalRecord {
   recordedById String
   recordedBy   User     @relation("PhysicalRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
   date         DateTime
-  metrics      String // JSON-encoded metric map (resistencia, velocidad, fuerza, agilidad, potencia...)
+  // ANTHROPOMETRIC (Área Médica: peso/talla/IMC/pliegues...) | PERFORMANCE
+  // (Rendimiento Físico: SJ/CMJ/IE/sprints/VIFT...) — same flexible model,
+  // discriminated so each tab's history only shows its own records.
+  recordType   String   @default("ANTHROPOMETRIC")
+  metrics      String // JSON-encoded metric map, shape depends on recordType
   observations String?
   createdAt    DateTime @default(now())
 
   @@index([playerId, date])
+  @@index([playerId, recordType, date])
 }
 
 /// "REGISTRO M" — discrete injury events, separate from the periodic
 /// PhysicalRecord test batteries above.
 model Injury {
-  id                   String    @id @default(uuid())
-  playerId             String
-  player               Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  recordedById         String
-  recordedBy           User      @relation("InjuryRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
-  description          String
-  bodyPart             String?
-  date                 DateTime
-  severity             String? // MILD | MODERATE | SEVERE
-  expectedRecoveryDays Int?
-  actualReturnDate     DateTime?
-  status               String    @default("ACTIVE") // ACTIVE | RECOVERING | CLEARED
-  painLevel            Int?
-  mobilityNotes        String?
-  createdAt            DateTime  @default(now())
+  id                      String    @id @default(uuid())
+  playerId                String
+  player                  Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  recordedById            String
+  recordedBy              User      @relation("InjuryRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  description             String
+  injuryType              String? // "Tipo de lesión" (e.g. Esguince, Desgarro, Fractura)
+  bodyPart                String? // "Zona afectada"
+  date                    DateTime // "Fecha de la lesión"
+  severity                String? // "Gravedad": MILD | MODERATE | SEVERE
+  responsibleProfessional String? // "Profesional Responsable" (kinesiólogo/médico a cargo)
+  treatment               String? // "Tratamiento"
+  expectedRecoveryDays    Int? // "Tiempo estimado de recuperación"
+  actualReturnDate        DateTime? // "Fecha de alta médica"
+  status                  String    @default("ACTIVE") // ACTIVE | RECOVERING | CLEARED
+  painLevel               Int?
+  mobilityNotes           String? // "Observaciones"
+  createdAt               DateTime  @default(now())
 
   @@index([playerId, date])
 }

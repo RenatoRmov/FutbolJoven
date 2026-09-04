@@ -31,4 +31,11 @@ export class ReportsController {
     const buffer = await this.reportsService.buildTeamReportPdf(user, id);
     sendPdf(res, buffer, `reporte-equipo-${id}.pdf`);
   }
+
+  @RequirePermission(PERMISSIONS.PHYSICAL_VIEW, PERMISSIONS.PHYSICAL_MANAGE)
+  @Get("players/:id/physical-performance-pdf")
+  async physicalPerformancePdf(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Res() res: Response) {
+    const buffer = await this.reportsService.buildPhysicalPerformancePdf(user, id);
+    sendPdf(res, buffer, `rendimiento-fisico-${id}.pdf`);
+  }
 }

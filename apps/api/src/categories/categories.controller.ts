@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { createCategorySchema, PERMISSIONS } from "@futboljoven/shared";
 import { RequirePermission } from "../auth/decorators/require-permission.decorator";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
@@ -11,8 +11,8 @@ export class CategoriesController {
   constructor(private categoriesService: CategoriesService) {}
 
   @Get()
-  findAll() {
-    return this.categoriesService.findAll();
+  findAll(@Query("includeInactive") includeInactive?: string) {
+    return this.categoriesService.findAll(includeInactive === "true");
   }
 
   @Get(":id")

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Card, CardContent } from "@/components/ui/Card";
+import { useEffect, useMemo, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { EmptyState, Skeleton } from "@/components/ui/Skeleton";
+import { MinutesBarChart } from "@/components/charts/MinutesBarChart";
 import { api } from "@/lib/api-client";
 
 interface Appearance {
@@ -30,6 +31,15 @@ export function MatchAppearancesTab({ playerId }: { playerId: string }) {
     api.get<Appearance[]>(`/fixtures/player/${playerId}/appearances`).then(setAppearances);
   }, [playerId]);
 
+  const minutesChartData = useMemo(
+    () =>
+      (appearances ?? []).slice(0, 8).map((a) => ({
+        label: `${new Date(a.match.date).toLocaleDateString("es-CL", { day: "2-digit", month: "short" })} · ${a.match.opponent}`,
+        minutes: a.minutesPlayed ?? 0,
+      })),
+    [appearances],
+  );
+
   if (!appearances) return <Skeleton className="h-48" />;
 
   const totalMinutes = appearances.reduce((sum, a) => sum + (a.minutesPlayed ?? 0), 0);
@@ -46,6 +56,17 @@ export function MatchAppearancesTab({ playerId }: { playerId: string }) {
         <StatBox label="Rojas" value={totalRed} />
       </div>
 
+      {minutesChartData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Minutos por partido</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <MinutesBarChart data={minutesChartData} />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="divide-y divide-borde py-0">
           {appearances.length === 0 ? (
@@ -60,6 +81,7 @@ export function MatchAppearancesTab({ playerId }: { playerId: string }) {
                   <p className="text-xs text-gris">
                     {new Date(a.match.date).toLocaleDateString("es-AR")}
                     {a.match.status === "PLAYED" && a.match.teamScore !== null && ` · ${a.match.teamScore}-${a.match.opponentScore}`}
+                    {a.started && " · Citado"}
                   </p>
                 </div>
                 <div className="flex gap-4 text-center">
