@@ -37,6 +37,26 @@ interface Match {
   appearances: { id: string; playerId: string; minutesPlayed: number | null; goals: number; yellowCards: number; redCard: boolean; player: { firstName: string; lastName: string } }[];
 }
 
+type MatchFormState = {
+  opponent: string;
+  date: string;
+  kickoffTime: string;
+  meetingTime: string;
+  city: string;
+  venue: string;
+  isHome: string;
+  coachName: string;
+  physicalTrainerName: string;
+  kineName: string;
+  equipmentManagerName: string;
+  otherStaffNotes: string;
+  techStaffArrivalTime: string;
+  playersArrivalTime: string;
+  busDepartureTime: string;
+  meetingPoint: string;
+  hotelNameAddress: string;
+};
+
 const STATUS_TONE: Record<string, "neutral" | "success" | "warning" | "danger" | "info"> = {
   SCHEDULED: "info",
   PLAYED: "success",
@@ -44,7 +64,7 @@ const STATUS_TONE: Record<string, "neutral" | "success" | "warning" | "danger" |
   CANCELLED: "danger",
 };
 
-const emptyForm = {
+const emptyForm: MatchFormState = {
   opponent: "",
   date: new Date().toISOString().slice(0, 10),
   kickoffTime: "",
@@ -64,6 +84,54 @@ const emptyForm = {
   hotelNameAddress: "",
 };
 
+function matchToForm(match: Match): MatchFormState {
+  return {
+    opponent: match.opponent,
+    date: match.date.slice(0, 10),
+    kickoffTime: match.kickoffTime ?? "",
+    meetingTime: match.meetingTime ?? "",
+    city: match.city ?? "",
+    venue: match.venue ?? "",
+    isHome: String(match.isHome),
+    coachName: match.coachName ?? "",
+    physicalTrainerName: match.physicalTrainerName ?? "",
+    kineName: match.kineName ?? "",
+    equipmentManagerName: match.equipmentManagerName ?? "",
+    otherStaffNotes: match.otherStaffNotes ?? "",
+    techStaffArrivalTime: match.techStaffArrivalTime ?? "",
+    playersArrivalTime: match.playersArrivalTime ?? "",
+    busDepartureTime: match.busDepartureTime ?? "",
+    meetingPoint: match.meetingPoint ?? "",
+    hotelNameAddress: match.hotelNameAddress ?? "",
+  };
+}
+
+function matchFormToPayload(form: MatchFormState) {
+  return {
+    opponent: form.opponent,
+    date: form.date,
+    kickoffTime: form.kickoffTime || null,
+    meetingTime: form.meetingTime || null,
+    city: form.city || null,
+    venue: form.venue || null,
+    isHome: form.isHome === "true",
+    coachName: form.coachName || null,
+    physicalTrainerName: form.physicalTrainerName || null,
+    kineName: form.kineName || null,
+    equipmentManagerName: form.equipmentManagerName || null,
+    otherStaffNotes: form.otherStaffNotes || null,
+    ...(form.isHome === "false"
+      ? {
+          techStaffArrivalTime: form.techStaffArrivalTime || null,
+          playersArrivalTime: form.playersArrivalTime || null,
+          busDepartureTime: form.busDepartureTime || null,
+          meetingPoint: form.meetingPoint || null,
+          hotelNameAddress: form.hotelNameAddress || null,
+        }
+      : { techStaffArrivalTime: null, playersArrivalTime: null, busDepartureTime: null, meetingPoint: null, hotelNameAddress: null }),
+  };
+}
+
 export default function TeamFixturePage() {
   const params = useParams<{ teamId: string }>();
   const router = useRouter();
@@ -73,9 +141,11 @@ export default function TeamFixturePage() {
   const [matches, setMatches] = useState<Match[] | null>(null);
   const [players, setPlayers] = useState<Player[] | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [formKey, setFormKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultMatchId, setResultMatchId] = useState<string | null>(null);
+  const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
 
   function load() {
     if (!teamId) return;
@@ -97,37 +167,27 @@ export default function TeamFixturePage() {
     setError(null);
     setSaving(true);
     try {
-      await api.post("/fixtures", {
-        teamId,
-        opponent: form.opponent,
-        date: form.date,
-        kickoffTime: form.kickoffTime || null,
-        meetingTime: form.meetingTime || null,
-        city: form.city || null,
-        venue: form.venue || null,
-        isHome: form.isHome === "true",
-        coachName: form.coachName || null,
-        physicalTrainerName: form.physicalTrainerName || null,
-        kineName: form.kineName || null,
-        equipmentManagerName: form.equipmentManagerName || null,
-        otherStaffNotes: form.otherStaffNotes || null,
-        ...(form.isHome === "false"
-          ? {
-              techStaffArrivalTime: form.techStaffArrivalTime || null,
-              playersArrivalTime: form.playersArrivalTime || null,
-              busDepartureTime: form.busDepartureTime || null,
-              meetingPoint: form.meetingPoint || null,
-              hotelNameAddress: form.hotelNameAddress || null,
-            }
-          : {}),
-      });
+      await api.post("/fixtures", { teamId, ...matchFormToPayload(form) });
       setForm(emptyForm);
+      setFormKey((k) => k + 1);
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo crear el partido");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleUpdate(matchId: string, updateForm: MatchFormState) {
+    await api.patch(`/fixtures/${matchId}`, matchFormToPayload(updateForm));
+    setEditingMatchId(null);
+    load();
+  }
+
+  async function handleDelete(matchId: string) {
+    if (!confirm("¿Eliminar este partido? Esta acción no se puede deshacer.")) return;
+    await api.delete(`/fixtures/${matchId}`);
+    load();
   }
 
   return (
@@ -155,85 +215,7 @@ export default function TeamFixturePage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreate} className="grid gap-3 md:grid-cols-3">
-              <div>
-                <Label>Rival</Label>
-                <Input required value={form.opponent} onChange={(e) => setForm({ ...form, opponent: e.target.value })} />
-              </div>
-              <div>
-                <Label>Fecha</Label>
-                <Input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-              </div>
-              <div>
-                <Label>Condición</Label>
-                <Select value={form.isHome} onChange={(e) => setForm({ ...form, isHome: e.target.value })}>
-                  <option value="true">Local</option>
-                  <option value="false">Visita</option>
-                </Select>
-              </div>
-              <div>
-                <Label>Hora de citación</Label>
-                <Input type="time" value={form.meetingTime} onChange={(e) => setForm({ ...form, meetingTime: e.target.value })} />
-              </div>
-              <div>
-                <Label>Hora de partido</Label>
-                <Input type="time" value={form.kickoffTime} onChange={(e) => setForm({ ...form, kickoffTime: e.target.value })} />
-              </div>
-              <div>
-                <Label>Ciudad</Label>
-                <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
-              </div>
-              <div>
-                <Label>Estadio</Label>
-                <Input value={form.venue} onChange={(e) => setForm({ ...form, venue: e.target.value })} />
-              </div>
-              <div>
-                <Label>Técnico</Label>
-                <Input value={form.coachName} onChange={(e) => setForm({ ...form, coachName: e.target.value })} />
-              </div>
-              <div>
-                <Label>Preparador físico</Label>
-                <Input value={form.physicalTrainerName} onChange={(e) => setForm({ ...form, physicalTrainerName: e.target.value })} />
-              </div>
-              <div>
-                <Label>Kinesiólogo</Label>
-                <Input value={form.kineName} onChange={(e) => setForm({ ...form, kineName: e.target.value })} />
-              </div>
-              <div>
-                <Label>Utilero</Label>
-                <Input value={form.equipmentManagerName} onChange={(e) => setForm({ ...form, equipmentManagerName: e.target.value })} />
-              </div>
-              <div className="md:col-span-2">
-                <Label>Otros</Label>
-                <Input value={form.otherStaffNotes} onChange={(e) => setForm({ ...form, otherStaffNotes: e.target.value })} />
-              </div>
-
-              {form.isHome === "false" && (
-                <>
-                  <p className="md:col-span-3 mt-2 font-display text-sm tracking-wide text-rojo-oscuro">Traslados</p>
-                  <div>
-                    <Label>Hora presentación cuerpo técnico</Label>
-                    <Input type="time" value={form.techStaffArrivalTime} onChange={(e) => setForm({ ...form, techStaffArrivalTime: e.target.value })} />
-                  </div>
-                  <div>
-                    <Label>Hora presentación jugadores</Label>
-                    <Input type="time" value={form.playersArrivalTime} onChange={(e) => setForm({ ...form, playersArrivalTime: e.target.value })} />
-                  </div>
-                  <div>
-                    <Label>Hora de salida del bus</Label>
-                    <Input type="time" value={form.busDepartureTime} onChange={(e) => setForm({ ...form, busDepartureTime: e.target.value })} />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label>Punto de encuentro</Label>
-                    <Input value={form.meetingPoint} onChange={(e) => setForm({ ...form, meetingPoint: e.target.value })} />
-                  </div>
-                  <p className="md:col-span-3 mt-1 font-display text-sm tracking-wide text-rojo-oscuro">Alojamiento</p>
-                  <div className="md:col-span-3">
-                    <Label>Nombre y dirección del hotel</Label>
-                    <Input value={form.hotelNameAddress} onChange={(e) => setForm({ ...form, hotelNameAddress: e.target.value })} />
-                  </div>
-                </>
-              )}
-
+              <MatchFormFields form={form} setForm={setForm} formKey={formKey} />
               <div className="md:col-span-3">
                 <Button type="submit" disabled={saving}>
                   {saving ? "Guardando..." : "Crear partido"}
@@ -260,11 +242,21 @@ export default function TeamFixturePage() {
             match={match}
             players={players ?? []}
             expanded={resultMatchId === match.id}
-            onToggle={() => setResultMatchId(resultMatchId === match.id ? null : match.id)}
+            editing={editingMatchId === match.id}
+            onToggleResult={() => {
+              setEditingMatchId(null);
+              setResultMatchId(resultMatchId === match.id ? null : match.id);
+            }}
+            onToggleEdit={() => {
+              setResultMatchId(null);
+              setEditingMatchId(editingMatchId === match.id ? null : match.id);
+            }}
             onSaved={() => {
               setResultMatchId(null);
               load();
             }}
+            onUpdate={(updateForm) => handleUpdate(match.id, updateForm)}
+            onDelete={() => handleDelete(match.id)}
           />
         ))}
       </div>
@@ -272,18 +264,126 @@ export default function TeamFixturePage() {
   );
 }
 
+function MatchFormFields({ form, setForm, formKey }: { form: MatchFormState; setForm: (f: MatchFormState) => void; formKey: number }) {
+  return (
+    <>
+      <div>
+        <Label>Rival</Label>
+        <Input required value={form.opponent} onChange={(e) => setForm({ ...form, opponent: e.target.value })} />
+      </div>
+      <div>
+        <Label>Fecha</Label>
+        <Input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+      </div>
+      <div>
+        <Label>Condición</Label>
+        <Select value={form.isHome} onChange={(e) => setForm({ ...form, isHome: e.target.value })}>
+          <option value="true">Local</option>
+          <option value="false">Visita</option>
+        </Select>
+      </div>
+      <div>
+        <Label>Hora de citación</Label>
+        <Input key={`meetingTime-${formKey}`} type="time" defaultValue={form.meetingTime} onChange={(e) => setForm({ ...form, meetingTime: e.target.value })} />
+      </div>
+      <div>
+        <Label>Hora de partido</Label>
+        <Input key={`kickoffTime-${formKey}`} type="time" defaultValue={form.kickoffTime} onChange={(e) => setForm({ ...form, kickoffTime: e.target.value })} />
+      </div>
+      <div>
+        <Label>Ciudad</Label>
+        <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+      </div>
+      <div>
+        <Label>Estadio</Label>
+        <Input value={form.venue} onChange={(e) => setForm({ ...form, venue: e.target.value })} />
+      </div>
+      <div>
+        <Label>Técnico</Label>
+        <Input value={form.coachName} onChange={(e) => setForm({ ...form, coachName: e.target.value })} />
+      </div>
+      <div>
+        <Label>Preparador físico</Label>
+        <Input value={form.physicalTrainerName} onChange={(e) => setForm({ ...form, physicalTrainerName: e.target.value })} />
+      </div>
+      <div>
+        <Label>Kinesiólogo</Label>
+        <Input value={form.kineName} onChange={(e) => setForm({ ...form, kineName: e.target.value })} />
+      </div>
+      <div>
+        <Label>Utilero</Label>
+        <Input value={form.equipmentManagerName} onChange={(e) => setForm({ ...form, equipmentManagerName: e.target.value })} />
+      </div>
+      <div className="md:col-span-2">
+        <Label>Otros</Label>
+        <Input value={form.otherStaffNotes} onChange={(e) => setForm({ ...form, otherStaffNotes: e.target.value })} />
+      </div>
+
+      {form.isHome === "false" && (
+        <>
+          <p className="md:col-span-3 mt-2 font-display text-sm tracking-wide text-rojo-oscuro">Traslados</p>
+          <div>
+            <Label>Hora presentación cuerpo técnico</Label>
+            <Input
+              key={`techStaffArrivalTime-${formKey}`}
+              type="time"
+              defaultValue={form.techStaffArrivalTime}
+              onChange={(e) => setForm({ ...form, techStaffArrivalTime: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Hora presentación jugadores</Label>
+            <Input
+              key={`playersArrivalTime-${formKey}`}
+              type="time"
+              defaultValue={form.playersArrivalTime}
+              onChange={(e) => setForm({ ...form, playersArrivalTime: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Hora de salida del bus</Label>
+            <Input
+              key={`busDepartureTime-${formKey}`}
+              type="time"
+              defaultValue={form.busDepartureTime}
+              onChange={(e) => setForm({ ...form, busDepartureTime: e.target.value })}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <Label>Punto de encuentro</Label>
+            <Input value={form.meetingPoint} onChange={(e) => setForm({ ...form, meetingPoint: e.target.value })} />
+          </div>
+          <p className="md:col-span-3 mt-1 font-display text-sm tracking-wide text-rojo-oscuro">Alojamiento</p>
+          <div className="md:col-span-3">
+            <Label>Nombre y dirección del hotel</Label>
+            <Input value={form.hotelNameAddress} onChange={(e) => setForm({ ...form, hotelNameAddress: e.target.value })} />
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 function MatchCard({
   match,
   players,
   expanded,
-  onToggle,
+  editing,
+  onToggleResult,
+  onToggleEdit,
   onSaved,
+  onUpdate,
+  onDelete,
 }: {
   match: Match;
   players: Player[];
   expanded: boolean;
-  onToggle: () => void;
+  editing: boolean;
+  onToggleResult: () => void;
+  onToggleEdit: () => void;
   onSaved: () => void;
+  onUpdate: (form: MatchFormState) => Promise<void>;
+  onDelete: () => void;
 }) {
   const totalYellow = match.appearances.reduce((sum, a) => sum + a.yellowCards, 0);
   const totalRed = match.appearances.reduce((sum, a) => sum + (a.redCard ? 1 : 0), 0);
@@ -340,16 +440,57 @@ function MatchCard({
             )}
             <Badge tone={STATUS_TONE[match.status] ?? "neutral"}>{MATCH_STATUS_LABELS[match.status as keyof typeof MATCH_STATUS_LABELS] ?? match.status}</Badge>
             {match.status !== "PLAYED" && (
-              <Button size="sm" variant="secondary" onClick={onToggle}>
+              <Button size="sm" variant="secondary" onClick={onToggleResult}>
                 {expanded ? "Cerrar" : "Cargar resultado"}
               </Button>
             )}
+            <Button size="sm" variant="ghost" onClick={onToggleEdit}>
+              {editing ? "Cerrar" : "Editar"}
+            </Button>
+            <Button size="sm" variant="ghost" className="text-rojo-oscuro" onClick={onDelete}>
+              Eliminar
+            </Button>
           </div>
         </div>
 
         {expanded && <ResultForm matchId={match.id} players={players} onSaved={onSaved} />}
+        {editing && <EditForm match={match} onSave={onUpdate} onCancel={onToggleEdit} />}
       </CardContent>
     </Card>
+  );
+}
+
+function EditForm({ match, onSave, onCancel }: { match: Match; onSave: (form: MatchFormState) => Promise<void>; onCancel: () => void }) {
+  const [form, setForm] = useState<MatchFormState>(() => matchToForm(match));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSaving(true);
+    try {
+      await onSave(form);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo actualizar el partido");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-4 grid gap-3 border-t border-borde pt-4 md:grid-cols-3">
+      <MatchFormFields form={form} setForm={setForm} formKey={0} />
+      <div className="md:col-span-3 flex items-center gap-2">
+        <Button type="submit" disabled={saving}>
+          {saving ? "Guardando..." : "Guardar cambios"}
+        </Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>
+          Cancelar
+        </Button>
+      </div>
+      {error && <p className="md:col-span-3 text-sm text-rojo-oscuro">{error}</p>}
+    </form>
   );
 }
 
