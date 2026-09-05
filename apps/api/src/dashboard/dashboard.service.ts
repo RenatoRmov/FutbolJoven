@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { computeNotaFinal, computeTalentStatus, PERMISSIONS, TALENT_STATUS_LABELS } from "@futboljoven/shared";
+import { computeNotaFinalForType, computeTalentStatus, PERMISSIONS, TALENT_STATUS_LABELS } from "@futboljoven/shared";
 import type { TalentStatus } from "@futboljoven/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import type { AuthenticatedUser } from "../auth/auth.types";
@@ -247,10 +247,11 @@ export class DashboardService {
   private async computeNotaFinalStats(playerIds: string[]) {
     const dimensions = await this.prisma.evaluationDimension.findMany({ where: { isActive: true } });
     const weightByDimension = new Map(dimensions.map((d) => [d.id, d.weight]));
+    const keyByDimension = new Map(dimensions.map((d) => [d.id, d.key]));
 
     const evaluations = await this.prisma.evaluation.findMany({
       where: { playerId: { in: playerIds } },
-      select: { playerId: true, date: true, scores: { select: { dimensionId: true, value: true } } },
+      select: { playerId: true, date: true, type: true, scores: { select: { dimensionId: true, value: true } } },
       orderBy: { date: "asc" },
     });
 
@@ -264,10 +265,11 @@ export class DashboardService {
       }
       const dimensionAverages = Array.from(byDimension.entries()).map(([dimensionId, values]) => ({
         dimensionId,
+        key: keyByDimension.get(dimensionId) ?? "",
         weight: weightByDimension.get(dimensionId) ?? 0,
         average: values.reduce((a, b) => a + b, 0) / values.length,
       }));
-      const notaFinal = computeNotaFinal(dimensionAverages);
+      const notaFinal = computeNotaFinalForType(dimensionAverages, ev.type);
       if (notaFinal === null) continue;
       const arr = pointsByPlayer.get(ev.playerId) ?? [];
       arr.push({ date: ev.date, value: notaFinal });

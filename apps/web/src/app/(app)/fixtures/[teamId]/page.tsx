@@ -497,14 +497,20 @@ function EditForm({ match, onSave, onCancel }: { match: Match; onSave: (form: Ma
 function ResultForm({ matchId, players, onSaved }: { matchId: string; players: Player[]; onSaved: () => void }) {
   const [teamScore, setTeamScore] = useState("0");
   const [opponentScore, setOpponentScore] = useState("0");
-  const [rows, setRows] = useState<Record<string, { started: boolean; minutesPlayed: string; goals: string; yellowCards: string; redCard: boolean }>>(() =>
-    Object.fromEntries(players.map((p) => [p.id, { started: false, minutesPlayed: "", goals: "0", yellowCards: "0", redCard: false }])),
+  const [rows, setRows] = useState<Record<string, { started: boolean; startingEleven: boolean; minutesPlayed: string; goals: string; yellowCards: string; redCard: boolean }>>(() =>
+    Object.fromEntries(players.map((p) => [p.id, { started: false, startingEleven: false, minutesPlayed: "", goals: "0", yellowCards: "0", redCard: false }])),
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const startingElevenCount = Object.values(rows).filter((r) => r.startingEleven).length;
+
   function setRow(playerId: string, patch: Partial<(typeof rows)[string]>) {
-    setRows((prev) => ({ ...prev, [playerId]: { ...prev[playerId], ...patch } }));
+    setRows((prev) => {
+      const next = { ...prev[playerId], ...patch };
+      if (!next.started) next.startingEleven = false; // no puede ser titular sin estar citado
+      return { ...prev, [playerId]: next };
+    });
   }
 
   async function handleSubmit() {
@@ -518,6 +524,7 @@ function ResultForm({ matchId, players, onSaved }: { matchId: string; players: P
           return {
             playerId: p.id,
             started: r.started,
+            startingEleven: r.startingEleven,
             minutesPlayed: r.minutesPlayed ? Number(r.minutesPlayed) : null,
             goals: Number(r.goals || 0),
             yellowCards: Number(r.yellowCards || 0),
@@ -550,12 +557,17 @@ function ResultForm({ matchId, players, onSaved }: { matchId: string; players: P
         </div>
       </div>
 
+      <p className="text-xs text-gris">
+        Titulares: <span className={startingElevenCount > 11 ? "font-semibold text-rojo-oscuro" : "font-semibold text-carbon"}>{startingElevenCount}/11</span>
+      </p>
+
       <div className="scrollbar-thin overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="text-left text-gris">
               <th className="py-1 pr-2">Jugador</th>
               <th className="px-2">Citado</th>
+              <th className="px-2">Titular</th>
               <th className="px-2">Minutos</th>
               <th className="px-2">Goles</th>
               <th className="px-2">Amarillas</th>
@@ -570,6 +582,14 @@ function ResultForm({ matchId, players, onSaved }: { matchId: string; players: P
                 </td>
                 <td className="px-2">
                   <input type="checkbox" checked={rows[p.id]?.started ?? false} onChange={(e) => setRow(p.id, { started: e.target.checked })} />
+                </td>
+                <td className="px-2">
+                  <input
+                    type="checkbox"
+                    checked={rows[p.id]?.startingEleven ?? false}
+                    disabled={!rows[p.id]?.started || (!rows[p.id]?.startingEleven && startingElevenCount >= 11)}
+                    onChange={(e) => setRow(p.id, { startingEleven: e.target.checked })}
+                  />
                 </td>
                 <td className="px-2">
                   <Input type="number" min={0} max={150} className="w-16" value={rows[p.id]?.minutesPlayed ?? ""} onChange={(e) => setRow(p.id, { minutesPlayed: e.target.value })} />

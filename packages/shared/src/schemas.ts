@@ -269,6 +269,7 @@ export type UpdateMatchDto = z.infer<typeof updateMatchSchema>;
 export const matchAppearanceEntrySchema = z.object({
   playerId: z.string().uuid(),
   started: z.boolean().optional().default(false),
+  startingEleven: z.boolean().optional().default(false),
   minutesPlayed: z.coerce.number().int().min(0).max(150).optional().nullable(),
   goals: z.coerce.number().int().min(0).max(20).optional().default(0),
   yellowCards: z.coerce.number().int().min(0).max(2).optional().default(0),

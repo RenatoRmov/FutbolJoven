@@ -27,6 +27,7 @@ interface Match {
   date: string;
   isHome: boolean;
   status: string;
+  appearances?: { playerId: string; started: boolean }[];
 }
 
 const METRIC_GLOSSARY: { title: string; metrics: string[] }[] = [
@@ -85,6 +86,11 @@ function minutesToScore(minutes: number): number {
   return Math.max(0, Math.min(10, minutes / 9));
 }
 
+/** Training days in the month -> 0-10 equivalent, same idea as minutesToScore. 20+ días = 10. */
+function daysToScore(days: number): number {
+  return Math.max(0, Math.min(10, days / 2));
+}
+
 // El punteo del club solo distingue Partido/Entrenamiento en la carga rápida
 // ("Período" sigue existiendo en el enum compartido para no romper el label
 // de evaluaciones históricas que ya lo usan, pero no se ofrece acá).
@@ -101,7 +107,8 @@ export default function QuickEvaluationPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [type, setType] = useState<string>("MATCH");
-  const [context, setContext] = useState("");
+  const [context, setContext] = useState(""); // Match.id seleccionado, o "" (sin partido asociado)
+  const [contextMatch, setContextMatch] = useState<Match | null>(null);
   const [scores, setScores] = useState<Record<string, Record<string, number>>>({});
   const [observations, setObservations] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -124,6 +131,27 @@ export default function QuickEvaluationPage() {
     });
   }, [teamId]);
 
+  useEffect(() => {
+    if (type !== "MATCH" || !context) {
+      setContextMatch(null);
+      return;
+    }
+    api.get<Match>(`/fixtures/${context}`).then(setContextMatch);
+  }, [type, context]);
+
+  // Cuando hay un partido de Contexto seleccionado, solo se puede evaluar a
+  // los jugadores citados a ese partido (los demás no jugaron).
+  const citadoIds = useMemo(() => {
+    if (type !== "MATCH" || !context || !contextMatch) return null;
+    return new Set(contextMatch.appearances?.filter((a) => a.started).map((a) => a.playerId) ?? []);
+  }, [type, context, contextMatch]);
+
+  const evaluablePlayers = useMemo(() => {
+    if (!players) return players;
+    if (!citadoIds) return players;
+    return players.filter((p) => citadoIds.has(p.id));
+  }, [players, citadoIds]);
+
   const midValue = useMemo(() => {
     if (dimensions.length === 0) return 6;
     return Math.round((dimensions[0].scale.minValue + dimensions[0].scale.maxValue) / 2);
@@ -134,25 +162,32 @@ export default function QuickEvaluationPage() {
   }
 
   async function handleSubmit() {
-    if (!players) return;
+    if (!evaluablePlayers) return;
     setError(null);
     setSuccess(null);
     setSaving(true);
     try {
-      const entries = players.map((p) => {
+      const contextLabel = context ? matches.find((m) => m.id === context) : null;
+      const entries = evaluablePlayers.map((p) => {
         const playerScores = scores[p.id] ?? {};
         return {
           playerId: p.id,
           observation: observations[p.id] || null,
           scores: dimensions.map((d) => {
             const raw = playerScores[d.id];
-            const value = d.key === "performance" ? minutesToScore(raw ?? 0) : raw ?? midValue;
+            const value = d.key !== "performance" ? raw ?? midValue : type === "TRAINING" ? daysToScore(raw ?? 0) : minutesToScore(raw ?? 0);
             return { dimensionId: d.id, value };
           }),
         };
       });
 
-      await api.post("/evaluations/quick", { teamId, date, type, context: context || null, entries });
+      await api.post("/evaluations/quick", {
+        teamId,
+        date,
+        type,
+        context: contextLabel ? `${new Date(contextLabel.date).toLocaleDateString("es-CL")} ${contextLabel.isHome ? "vs" : "@"} ${contextLabel.opponent}` : null,
+        entries,
+      });
       setSuccess(`Se guardaron ${entries.length} evaluaciones.`);
       setScores({});
       setObservations({});
@@ -206,7 +241,7 @@ export default function QuickEvaluationPage() {
                 <Select value={context} onChange={(e) => setContext(e.target.value)}>
                   <option value="">Sin partido asociado</option>
                   {matches.map((m) => (
-                    <option key={m.id} value={`${new Date(m.date).toLocaleDateString("es-CL")} ${m.isHome ? "vs" : "@"} ${m.opponent}`}>
+                    <option key={m.id} value={m.id}>
                       {new Date(m.date).toLocaleDateString("es-CL")} {m.isHome ? "vs" : "@"} {m.opponent}
                       {m.status === "SCHEDULED" ? " (programado)" : m.status === "PLAYED" ? " (jugado)" : ""}
                     </option>
@@ -214,7 +249,7 @@ export default function QuickEvaluationPage() {
                 </Select>
               </div>
             )}
-            <Button onClick={handleSubmit} disabled={saving || !players || players.length === 0}>
+            <Button onClick={handleSubmit} disabled={saving || !evaluablePlayers || evaluablePlayers.length === 0}>
               {saving ? "Guardando..." : "Guardar evaluaciones"}
             </Button>
           </CardContent>
@@ -233,19 +268,30 @@ export default function QuickEvaluationPage() {
 
         {players && players.length === 0 && <EmptyState title="Este equipo no tiene jugadores cargados" />}
 
-        {players && players.length > 0 && (
+        {type === "MATCH" && context && contextMatch && contextMatch.status !== "PLAYED" && (
+          <EmptyState title="Cargá primero el resultado de este partido en Fixture para poder evaluar a los citados" />
+        )}
+
+        {players && players.length > 0 && evaluablePlayers && (context === "" || type !== "MATCH" || (contextMatch && contextMatch.status === "PLAYED")) && (
           <Table>
             <Thead>
               <Tr>
                 <Th className="sticky left-0 bg-gris-claro">Jugador</Th>
                 {dimensions.map((d) => (
-                  <Th key={d.id}>{d.key === "performance" ? "Minutos jugados" : d.name}</Th>
+                  <Th key={d.id}>{d.key === "performance" ? (type === "TRAINING" ? "Días entrenados (mes)" : "Minutos jugados") : d.name}</Th>
                 ))}
                 <Th>Observación</Th>
               </Tr>
             </Thead>
             <Tbody>
-              {players.map((p) => (
+              {evaluablePlayers.length === 0 && (
+                <Tr>
+                  <Td colSpan={dimensions.length + 2} className="text-center text-sm text-gris">
+                    Ningún jugador citado a este partido.
+                  </Td>
+                </Tr>
+              )}
+              {evaluablePlayers.map((p) => (
                 <Tr key={p.id}>
                   <Td className="sticky left-0 whitespace-nowrap bg-white font-medium text-carbon">
                     {p.firstName} {p.lastName}
@@ -256,8 +302,8 @@ export default function QuickEvaluationPage() {
                         <Input
                           type="number"
                           min={0}
-                          max={130}
-                          placeholder="Min."
+                          max={type === "TRAINING" ? 31 : 130}
+                          placeholder={type === "TRAINING" ? "Días" : "Min."}
                           className="w-20"
                           value={scores[p.id]?.[d.id] ?? ""}
                           onChange={(e) => setScore(p.id, d.id, Number(e.target.value))}
@@ -309,7 +355,8 @@ export default function QuickEvaluationPage() {
           ))}
           <p className="text-xs text-gris">
             &quot;Minutos jugados&quot; (Rendimiento) se ingresa como un número real de minutos, no como una nota 1-10 — se
-            convierte automáticamente a la escala 0-10 para el cálculo de la Nota Final (90 minutos = 10).
+            convierte automáticamente a la escala 0-10 para el cálculo de la Nota Final (90 minutos = 10). En evaluaciones de
+            Entrenamiento, ese mismo campo se reemplaza por &quot;Días entrenados (mes)&quot; (20 días = 10).
           </p>
         </div>
         <Button className="mt-5 w-full" onClick={() => setGlossaryOpen(false)}>

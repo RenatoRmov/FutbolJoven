@@ -144,12 +144,13 @@ model MatchAppearance {
   playerId String
   player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
-  started       Boolean @default(false) // "Citado" en la UI — llamado a la nómina del partido
-  minutesPlayed Int?
-  goals         Int     @default(0)
-  yellowCards   Int     @default(0) // 0, 1 or 2
-  redCard       Boolean @default(false)
-  notes         String?
+  started        Boolean @default(false) // "Citado" en la UI — llamado a la nómina del partido
+  startingEleven Boolean @default(false) // "Titular" en la UI — máximo 11 por partido, requiere started=true
+  minutesPlayed  Int?
+  goals          Int     @default(0)
+  yellowCards    Int     @default(0) // 0, 1 or 2
+  redCard        Boolean @default(false)
+  notes          String?
 
   @@unique([matchId, playerId])
   @@index([playerId])

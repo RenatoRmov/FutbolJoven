@@ -20,13 +20,18 @@ import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { calculateAge, ESTATUS_LABELS, ESTATUS_TONE, GENDER_LABELS, Player, POSITION_LABELS, STATUS_LABELS, STATUS_TONE } from "@/lib/types";
 
-interface EvolutionResponse {
+interface EvolutionBucket {
   series: { dimensionKey: string; dimensionName: string; points: { date: string; value: number }[] }[];
   radar: { dimensionKey: string; dimensionName: string; value: number | null }[];
   previousRadar: { dimensionKey: string; dimensionName: string; value: number | null }[];
   teamAverageRadar: { dimensionKey: string; dimensionName: string; value: number | null }[];
   notaFinal: number | null;
   estatus: string | null;
+}
+
+interface EvolutionResponse {
+  match: EvolutionBucket;
+  training: EvolutionBucket;
 }
 
 interface EvaluationListItem {
@@ -86,21 +91,33 @@ export default function PlayerProfilePage() {
     );
   }
 
-  const radarData: RadarPoint[] =
-    evolution?.radar.map((r, i) => ({
-      dimensionName: r.dimensionName,
-      current: r.value,
-      previous: evolution.previousRadar[i]?.value ?? null,
-      teamAverage: evolution.teamAverageRadar[i]?.value ?? null,
-    })) ?? [];
+  function toRadarData(bucket: EvolutionBucket | undefined): RadarPoint[] {
+    return (
+      bucket?.radar.map((r, i) => ({
+        dimensionName: r.dimensionName,
+        current: r.value,
+        previous: bucket.previousRadar[i]?.value ?? null,
+        teamAverage: bucket.teamAverageRadar[i]?.value ?? null,
+      })) ?? []
+    );
+  }
 
-  const evolutionSeries: EvolutionSeries[] =
-    evolution?.series.map((s) => ({
-      dimensionName: s.dimensionName,
-      points: s.points.map((p) => ({ date: p.date, value: p.value })),
-    })) ?? [];
+  function toEvolutionSeries(bucket: EvolutionBucket | undefined): EvolutionSeries[] {
+    return (
+      bucket?.series.map((s) => ({
+        dimensionName: s.dimensionName,
+        points: s.points.map((p) => ({ date: p.date, value: p.value })),
+      })) ?? []
+    );
+  }
 
-  const latestByDimension = new Map(evolution?.radar.map((r) => [r.dimensionName, r.value]) ?? []);
+  const radarDataMatch = toRadarData(evolution?.match);
+  const radarDataTraining = toRadarData(evolution?.training);
+  const evolutionSeriesMatch = toEvolutionSeries(evolution?.match);
+  const evolutionSeriesTraining = toEvolutionSeries(evolution?.training);
+
+  // Fortalezas/Áreas a desarrollar se basan en el radar de Partido (el que también define el Estatus deportivo).
+  const latestByDimension = new Map(evolution?.match.radar.map((r) => [r.dimensionName, r.value]) ?? []);
   const strengths = [...latestByDimension.entries()].filter(([, v]) => (v ?? 0) >= 7).map(([k]) => k);
   const growthAreas = [...latestByDimension.entries()].filter(([, v]) => v !== null && v < 6).map(([k]) => k);
 
@@ -134,10 +151,10 @@ export default function PlayerProfilePage() {
                   {player.firstName} {player.lastName}
                 </h2>
                 <Badge tone={STATUS_TONE[player.status] ?? "neutral"}>{STATUS_LABELS[player.status] ?? player.status}</Badge>
-                {evolution?.estatus && (
-                  <Badge tone={ESTATUS_TONE[evolution.estatus as keyof typeof ESTATUS_TONE] ?? "neutral"}>
-                    {ESTATUS_LABELS[evolution.estatus] ?? evolution.estatus}
-                    {evolution.notaFinal !== null && ` · Nota Final ${evolution.notaFinal}`}
+                {evolution?.match.estatus && (
+                  <Badge tone={ESTATUS_TONE[evolution.match.estatus as keyof typeof ESTATUS_TONE] ?? "neutral"}>
+                    {ESTATUS_LABELS[evolution.match.estatus] ?? evolution.match.estatus}
+                    {evolution.match.notaFinal !== null && ` · Nota Final ${evolution.match.notaFinal}`}
                   </Badge>
                 )}
               </div>
@@ -171,15 +188,25 @@ export default function PlayerProfilePage() {
 
           <TabsContent value="resumen" className="pt-5">
             <div className="grid gap-4 lg:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Radar de habilidades</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {radarData.length > 0 ? <PlayerRadarChart data={radarData} /> : <EmptyState title="Sin evaluaciones todavía" />}
-                </CardContent>
-              </Card>
-              <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2 lg:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Radar de habilidades — Partido</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {radarDataMatch.some((r) => r.current !== null) ? <PlayerRadarChart data={radarDataMatch} /> : <EmptyState title="Sin evaluaciones de partido todavía" />}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Radar de habilidades — Entrenamiento</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {radarDataTraining.some((r) => r.current !== null) ? <PlayerRadarChart data={radarDataTraining} /> : <EmptyState title="Sin evaluaciones de entrenamiento todavía" />}
+                  </CardContent>
+                </Card>
+              </div>
+              <div className="space-y-4 lg:col-span-2">
                 <Card>
                   <CardHeader>
                     <CardTitle>Fortalezas actuales</CardTitle>
@@ -261,16 +288,28 @@ export default function PlayerProfilePage() {
             </TabsContent>
           )}
 
-          <TabsContent value="evolucion" className="pt-5">
+          <TabsContent value="evolucion" className="space-y-4 pt-5">
             <Card>
               <CardHeader>
-                <CardTitle>Evolución por dimensión</CardTitle>
+                <CardTitle>Evolución por dimensión — Partido</CardTitle>
               </CardHeader>
               <CardContent>
-                {evolutionSeries.some((s) => s.points.length > 0) ? (
-                  <EvolutionLineChart series={evolutionSeries} />
+                {evolutionSeriesMatch.some((s) => s.points.length > 0) ? (
+                  <EvolutionLineChart series={evolutionSeriesMatch} />
                 ) : (
-                  <EmptyState title="Todavía no hay historial suficiente" description="Se necesitan al menos dos evaluaciones." />
+                  <EmptyState title="Todavía no hay historial suficiente" description="Se necesitan al menos dos evaluaciones de partido." />
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Evolución por dimensión — Entrenamiento</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {evolutionSeriesTraining.some((s) => s.points.length > 0) ? (
+                  <EvolutionLineChart series={evolutionSeriesTraining} />
+                ) : (
+                  <EmptyState title="Todavía no hay historial suficiente" description="Se necesitan al menos dos evaluaciones de entrenamiento." />
                 )}
               </CardContent>
             </Card>

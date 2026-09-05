@@ -1,15 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { PERMISSIONS } from "@futboljoven/shared";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { Input, Label, Textarea } from "@/components/ui/Input";
 import { EmptyState, Skeleton } from "@/components/ui/Skeleton";
 import { MetricLineChart } from "@/components/charts/MetricLineChart";
-import { api, ApiError } from "@/lib/api-client";
-import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api-client";
 
 interface NutritionRecord {
   id: string;
@@ -34,44 +30,11 @@ function computeImc(weight: number | null, height: number | null): number | null
 }
 
 export function NutritionTab({ playerId }: { playerId: string }) {
-  const { hasPermission } = useAuth();
   const [records, setRecords] = useState<NutritionRecord[] | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ weight: "", height: "", bodyFatPercent: "", muscleMassPercent: "", mealsPerDay: "", dailyWaterLiters: "", observations: "" });
 
-  const canManage = hasPermission(PERMISSIONS.NUTRITION_MANAGE);
-
-  function load() {
+  useEffect(() => {
     api.get<NutritionRecord[]>(`/nutrition/player/${playerId}`).then(setRecords);
-  }
-
-  useEffect(load, [playerId]);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSaving(true);
-    try {
-      await api.post("/nutrition", {
-        playerId,
-        date: new Date().toISOString().slice(0, 10),
-        weight: form.weight ? Number(form.weight) : null,
-        height: form.height ? Number(form.height) : null,
-        bodyFatPercent: form.bodyFatPercent ? Number(form.bodyFatPercent) : null,
-        muscleMassPercent: form.muscleMassPercent ? Number(form.muscleMassPercent) : null,
-        mealsPerDay: form.mealsPerDay ? Number(form.mealsPerDay) : null,
-        dailyWaterLiters: form.dailyWaterLiters ? Number(form.dailyWaterLiters) : null,
-        observations: form.observations || null,
-      });
-      setForm({ weight: "", height: "", bodyFatPercent: "", muscleMassPercent: "", mealsPerDay: "", dailyWaterLiters: "", observations: "" });
-      load();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo guardar el registro");
-    } finally {
-      setSaving(false);
-    }
-  }
+  }, [playerId]);
 
   if (!records) return <Skeleton className="h-48" />;
 
@@ -86,52 +49,6 @@ export function NutritionTab({ playerId }: { playerId: string }) {
 
   return (
     <div className="space-y-4">
-      {canManage && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Nuevo registro nutricional</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <div>
-                <Label>Peso (kg)</Label>
-                <Input type="number" step="0.1" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} />
-              </div>
-              <div>
-                <Label>Altura (cm)</Label>
-                <Input type="number" step="0.1" value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} />
-              </div>
-              <div>
-                <Label>% Grasa</Label>
-                <Input type="number" step="0.1" value={form.bodyFatPercent} onChange={(e) => setForm({ ...form, bodyFatPercent: e.target.value })} />
-              </div>
-              <div>
-                <Label>% Masa muscular</Label>
-                <Input type="number" step="0.1" value={form.muscleMassPercent} onChange={(e) => setForm({ ...form, muscleMassPercent: e.target.value })} />
-              </div>
-              <div>
-                <Label>Comidas / día</Label>
-                <Input type="number" value={form.mealsPerDay} onChange={(e) => setForm({ ...form, mealsPerDay: e.target.value })} />
-              </div>
-              <div>
-                <Label>Agua diaria (L)</Label>
-                <Input type="number" step="0.1" value={form.dailyWaterLiters} onChange={(e) => setForm({ ...form, dailyWaterLiters: e.target.value })} />
-              </div>
-              <div className="col-span-2 md:col-span-4">
-                <Label>Observaciones</Label>
-                <Textarea rows={2} value={form.observations} onChange={(e) => setForm({ ...form, observations: e.target.value })} />
-              </div>
-              <div className="col-span-2 md:col-span-4">
-                <Button type="submit" disabled={saving}>
-                  {saving ? "Guardando..." : "Guardar registro"}
-                </Button>
-              </div>
-            </form>
-            {error && <p className="mt-2 text-sm text-rojo-oscuro">{error}</p>}
-          </CardContent>
-        </Card>
-      )}
-
       {records.length === 0 ? (
         <EmptyState title="Sin registros nutricionales" />
       ) : (

@@ -97,22 +97,42 @@ export interface RadarAxis {
   teamAverage: number | null;
 }
 
+export interface RadarChartOptions {
+  maxValue?: number;
+  /** Center x in page coordinates. Defaults to the page's horizontal center (standalone/full-width use). */
+  centerX?: number;
+  /** Chart diameter in points. Defaults to 200. */
+  size?: number;
+  /** Top y in page coordinates. When provided, the chart never reads/writes `doc.y` — the caller
+   * tracks its own cursor (used for the two side-by-side column radars). Omit for the original
+   * full-width standalone behavior, which advances `doc.y` past the chart + legend itself. */
+  topY?: number;
+  showLegend?: boolean;
+}
+
 /**
  * Spider/radar chart matching the "Radar de habilidades" card on the web
  * player profile (Actual/Anterior/Promedio categoría over the same
  * dimensions) — drawn with pdfkit vector primitives since there's no
  * headless browser available to rasterize the web chart itself.
+ *
+ * Returns the y position immediately below everything drawn (chart + legend),
+ * so callers doing manual column layout can chain from it.
  */
-export function drawRadarChart(doc: PDFKit.PDFDocument, axes: RadarAxis[], maxValue = 10) {
+export function drawRadarChart(doc: PDFKit.PDFDocument, axes: RadarAxis[], options: RadarChartOptions = {}): number {
+  const { maxValue = 10, size = 200, showLegend = true } = options;
+  const standalone = options.topY === undefined;
   const n = axes.length;
-  if (n < 3) return;
+  if (n < 3) return options.topY ?? doc.y;
 
-  const size = 200;
-  ensureSpace(doc, size + 40);
-  const centerX = doc.page.width / 2;
-  const top = doc.y + 10;
+  if (standalone) ensureSpace(doc, size + 40);
+  const centerX = options.centerX ?? doc.page.width / 2;
+  const top = options.topY ?? doc.y + 10;
   const centerY = top + size / 2;
   const radius = size / 2;
+  const labelFontSize = Math.max(6, size / 26.5);
+  const labelOffset = Math.max(14, size * 0.11);
+  const labelBoxWidth = Math.max(45, size * 0.45);
 
   const angleFor = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / n;
   const pointFor = (i: number, value: number) => {
@@ -135,11 +155,15 @@ export function drawRadarChart(doc: PDFKit.PDFDocument, axes: RadarAxis[], maxVa
     const [x, y] = pointFor(i, maxValue);
     doc.strokeColor(COLORS.borde).lineWidth(0.5).moveTo(centerX, centerY).lineTo(x, y).stroke();
     const labelAngle = angleFor(i);
-    const labelR = radius + 22;
+    const labelR = radius + labelOffset;
     const lx = centerX + labelR * Math.cos(labelAngle);
     const ly = centerY + labelR * Math.sin(labelAngle);
     const align = Math.cos(labelAngle) > 0.3 ? "left" : Math.cos(labelAngle) < -0.3 ? "right" : "center";
-    doc.fontSize(7.5).fillColor(COLORS.carbon).font("Helvetica-Bold").text(axis.label, lx - 45, ly - 4, { width: 90, align });
+    doc
+      .fontSize(labelFontSize)
+      .fillColor(COLORS.carbon)
+      .font("Helvetica-Bold")
+      .text(axis.label, lx - labelBoxWidth / 2, ly - labelFontSize / 2, { width: labelBoxWidth, align });
   });
 
   function drawSeries(getValue: (a: RadarAxis) => number | null, color: string, fillOpacity: number, dashed: boolean) {
@@ -164,22 +188,89 @@ export function drawRadarChart(doc: PDFKit.PDFDocument, axes: RadarAxis[], maxVa
   drawSeries((a) => a.previous, COLORS.dorado, 0.12, false);
   drawSeries((a) => a.current, COLORS.rojo, 0.28, false);
 
-  doc.y = top + size + 30;
+  let bottomY = top + size + 14;
 
-  // Legend.
-  const legendY = doc.y - 16;
-  const legendItems: [string, string][] = [
-    ["Actual", COLORS.rojo],
-    ["Anterior", COLORS.dorado],
-    ["Promedio categoría", COLORS.gris],
-  ];
-  let lx = centerX - 130;
-  for (const [label, color] of legendItems) {
-    doc.rect(lx, legendY, 8, 8).fill(color);
-    doc.fontSize(8).fillColor(COLORS.gris).font("Helvetica").text(label, lx + 12, legendY - 1);
-    lx += 12 + doc.widthOfString(label) + 18;
+  if (showLegend) {
+    const legendY = bottomY;
+    const legendFontSize = Math.max(6.5, labelFontSize - 0.5);
+    const legendItems: [string, string][] = [
+      ["Actual", COLORS.rojo],
+      ["Anterior", COLORS.dorado],
+      ["Promedio categoría", COLORS.gris],
+    ];
+    doc.fontSize(legendFontSize).font("Helvetica");
+    const totalWidth = legendItems.reduce((sum, [label]) => sum + 12 + doc.widthOfString(label) + 14, -14);
+    let lx = centerX - totalWidth / 2;
+    for (const [label, color] of legendItems) {
+      doc.rect(lx, legendY, 7, 7).fill(color);
+      doc.fontSize(legendFontSize).fillColor(COLORS.gris).font("Helvetica").text(label, lx + 10, legendY - 1);
+      lx += 10 + doc.widthOfString(label) + 14;
+    }
+    bottomY = legendY + legendFontSize + 10;
   }
-  doc.y = legendY + 20;
+
+  if (standalone) doc.y = bottomY;
+  return bottomY;
+}
+
+/** Big value + small caption below, e.g. "67 kg" / "PESO CORPORAL". Returns the y below the card. */
+export function drawStatCard(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number, value: string, label: string): number {
+  doc.roundedRect(x, y, w, h, 4).fill(COLORS.grisClaro);
+  // pdfkit's lineBreak:false + ellipsis doesn't reliably keep long values on one
+  // line at this column width — shrink the font instead of risking a wrap that
+  // bleeds into the caption below.
+  const valueFontSize = value.length > 6 ? 10 : value.length > 4 ? 11.5 : 13;
+  doc
+    .fillColor(COLORS.rojoOscuro)
+    .fontSize(valueFontSize)
+    .font("Helvetica-Bold")
+    .text(value, x + 2, y + h / 2 - valueFontSize / 2 - 3, { width: w - 4, align: "center" });
+  const labelFontSize = label.length > 14 ? 5.5 : 6.5;
+  doc
+    .fillColor(COLORS.gris)
+    .fontSize(labelFontSize)
+    .font("Helvetica")
+    .text(label.toUpperCase(), x + 2, y + h - 14, { width: w - 4, align: "center" });
+  return y + h;
+}
+
+/** Small table (a handful of rows) at an explicit position — used where a full-width table would be too tall for a column. Returns the y below the table. */
+export function drawMiniTable(doc: PDFKit.PDFDocument, x: number, y: number, width: number, headers: string[], rows: string[][]): number {
+  const colWidth = width / headers.length;
+  doc.fontSize(7).fillColor(COLORS.rojoOscuro).font("Helvetica-Bold");
+  headers.forEach((h, i) => doc.text(h, x + i * colWidth, y, { width: colWidth - 2 }));
+  let rowY = y + 11;
+  doc.strokeColor(COLORS.borde).lineWidth(0.5).moveTo(x, rowY - 2).lineTo(x + width, rowY - 2).stroke();
+  doc.font("Helvetica").fillColor(COLORS.carbon).fontSize(7);
+  for (const row of rows) {
+    row.forEach((cell, i) => doc.text(cell, x + i * colWidth, rowY, { width: colWidth - 2, height: 9, ellipsis: true, lineBreak: false }));
+    rowY += 12;
+  }
+  return rowY;
+}
+
+/** Section title at an explicit position, for column layouts. Returns the y below the title. */
+export function columnSectionTitle(doc: PDFKit.PDFDocument, text: string, x: number, y: number, width: number): number {
+  doc.fillColor(COLORS.rojoOscuro).fontSize(11).font("Helvetica-Bold");
+  doc.text(text, x, y, { width });
+  const consumed = doc.heightOfString(text, { width });
+  doc.fillColor(COLORS.carbon).font("Helvetica").fontSize(8);
+  return y + consumed + 6;
+}
+
+/** Body text at an explicit position, for column layouts. Returns the y below the text. */
+export function columnText(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  options: PDFKit.Mixins.TextOptions & { fontSize?: number } = {},
+): number {
+  const { fontSize = 9, ...textOptions } = options;
+  doc.fontSize(fontSize);
+  doc.text(text, x, y, { width, ...textOptions });
+  return y + doc.heightOfString(text, { width, ...textOptions }) + 3;
 }
 
 /** Printed "signature" footer — every generated report carries this audit trail. */

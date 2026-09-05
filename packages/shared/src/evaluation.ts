@@ -156,3 +156,17 @@ export function computeNotaFinal(dimensionAverages: DimensionAverage[]): number 
   const total = scored.reduce((sum, d) => sum + (d.average as number) * d.weight, 0);
   return Number(total.toFixed(2));
 }
+
+/**
+ * Same as computeNotaFinal, but for a "TRAINING" evaluation the "performance"
+ * dimension (minutos jugados / partidos — meaningless for a training session)
+ * is dropped and the remaining weights are rescaled to sum back to 1, so a
+ * training's Nota Final is never dragged down by an inapplicable dimension.
+ */
+export function computeNotaFinalForType(dimensionAverages: (DimensionAverage & { key: string })[], type: string): number | null {
+  if (type !== "TRAINING") return computeNotaFinal(dimensionAverages);
+  const applicable = dimensionAverages.filter((d) => d.key !== "performance");
+  const weightSum = applicable.reduce((sum, d) => sum + d.weight, 0);
+  const rescaled = applicable.map((d) => ({ ...d, weight: weightSum > 0 ? d.weight / weightSum : d.weight }));
+  return computeNotaFinal(rescaled);
+}

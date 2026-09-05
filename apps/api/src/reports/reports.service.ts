@@ -1,12 +1,30 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { computeNotaFinal, computeTalentStatus, PERMISSIONS, TALENT_STATUS_LABELS } from "@futboljoven/shared";
+import { computeNotaFinalForType, computeTalentStatus, PERMISSIONS, PLAYER_POSITION_LABELS, TALENT_STATUS_LABELS } from "@futboljoven/shared";
 import type { TalentStatus } from "@futboljoven/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { assertTeamInScope } from "../common/scope.util";
 import { EvaluationsService } from "../evaluations/evaluations.service";
 import type { AuthenticatedUser } from "../auth/auth.types";
-import { addHeader, addSignatureBlock, COLORS, drawBar, drawRadarChart, ensureSpace, fullWidthText, renderPdfToBuffer, sectionTitle, STATUS_COLORS } from "./pdf.util";
+import {
+  addHeader,
+  addSignatureBlock,
+  COLORS,
+  columnSectionTitle,
+  columnText,
+  drawBar,
+  drawMiniTable,
+  drawRadarChart,
+  drawStatCard,
+  ensureSpace,
+  fullWidthText,
+  renderPdfToBuffer,
+  sectionTitle,
+  STATUS_COLORS,
+} from "./pdf.util";
 import type { RadarAxis } from "./pdf.util";
+
+const PAGE_MARGIN = 40;
+const PAGE_CONTENT_WIDTH = 595.28 - PAGE_MARGIN * 2;
 
 @Injectable()
 export class ReportsService {
@@ -27,7 +45,7 @@ export class ReportsService {
       throw new NotFoundException("Jugador no encontrado");
     }
 
-    const [evaluations, appearances, injuries, evolution] = await Promise.all([
+    const [evaluations, appearances, injuries, evolution, anthroRecords] = await Promise.all([
       this.prisma.evaluation.findMany({
         where: { playerId },
         include: { scores: { include: { dimension: true } }, evaluator: { select: { firstName: true, lastName: true } } },
@@ -40,124 +58,225 @@ export class ReportsService {
       }),
       this.prisma.injury.findMany({ where: { playerId }, orderBy: { date: "desc" } }),
       this.evaluationsService.getPlayerEvolution(user, playerId),
+      this.prisma.physicalRecord.findMany({
+        where: { playerId, recordType: "ANTHROPOMETRIC" },
+        include: { recordedBy: { select: { firstName: true, lastName: true } } },
+        orderBy: { date: "desc" },
+        take: 3,
+      }),
     ]);
     const latestInjury = injuries[0] ?? null;
+    const latestMatch = appearances[0] ?? null;
+    const latestObservation = evaluations.find((ev) => ev.observation)?.observation ?? player.notes ?? null;
 
-    // Same series as the "Radar de habilidades" card on the web player profile.
-    const radarAxes: RadarAxis[] = evolution.radar.map((r, i) => ({
+    const radarAxesMatch: RadarAxis[] = evolution.match.radar.map((r, i) => ({
       label: r.dimensionName,
       current: r.value,
-      previous: evolution.previousRadar[i]?.value ?? null,
-      teamAverage: evolution.teamAverageRadar[i]?.value ?? null,
+      previous: evolution.match.previousRadar[i]?.value ?? null,
+      teamAverage: evolution.match.teamAverageRadar[i]?.value ?? null,
+    }));
+    const radarAxesTraining: RadarAxis[] = evolution.training.radar.map((r, i) => ({
+      label: r.dimensionName,
+      current: r.value,
+      previous: evolution.training.previousRadar[i]?.value ?? null,
+      teamAverage: evolution.training.teamAverageRadar[i]?.value ?? null,
     }));
 
-    const scoredEvaluations = evaluations.map((ev) => {
-      const byDimension = new Map<string, { weight: number; values: number[] }>();
-      for (const s of ev.scores) {
-        const entry = byDimension.get(s.dimension.id) ?? { weight: s.dimension.weight, values: [] };
-        entry.values.push(s.value);
-        byDimension.set(s.dimension.id, entry);
-      }
-      const dimensionAverages = Array.from(byDimension.entries()).map(([dimensionId, { weight, values }]) => ({
-        dimensionId,
-        weight,
-        average: values.reduce((a, b) => a + b, 0) / values.length,
-      }));
-      const notaFinal = computeNotaFinal(dimensionAverages);
-      return { evaluation: ev, notaFinal, estatus: computeTalentStatus(notaFinal), byDimension };
-    });
-
-    const latest = scoredEvaluations[0] ?? null;
     const aptitud = !latestInjury || latestInjury.status === "CLEARED" ? "Apto" : latestInjury.status === "RECOVERING" ? "En reintegro" : "No apto";
-
     const totalMinutes = appearances.reduce((sum, a) => sum + (a.minutesPlayed ?? 0), 0);
     const totalGoals = appearances.reduce((sum, a) => sum + a.goals, 0);
     const totalYellow = appearances.reduce((sum, a) => sum + a.yellowCards, 0);
     const totalRed = appearances.reduce((sum, a) => sum + (a.redCard ? 1 : 0), 0);
 
+    const anthro = anthroRecords.map((r) => {
+      const metrics = JSON.parse(r.metrics) as Record<string, number>;
+      const imc = metrics.weight && metrics.height ? Number((metrics.weight / (metrics.height / 100) ** 2).toFixed(1)) : null;
+      const clasificacion = imc === null ? "—" : imc < 18.5 ? "Riesgo de desnutrición" : imc < 25 ? "Normal" : imc < 30 ? "Sobrepeso" : "Obesidad";
+      return { date: r.date, metrics, imc, clasificacion, recordedBy: r.recordedBy };
+    });
+    const latestAnthro = anthro[0] ?? null;
+
+    const colGap = 20;
+    const colWidth = (PAGE_CONTENT_WIDTH - colGap) / 2;
+    const leftX = PAGE_MARGIN;
+    const rightX = PAGE_MARGIN + colWidth + colGap;
+
     return renderPdfToBuffer((doc) => {
+      // ---- Página 1: resumen del jugador ----
       addHeader(doc, `${player.firstName} ${player.lastName}`, "Ficha individual de jugador");
 
       const category = player.currentTeam?.category?.name ?? "Sin categoría";
+      const positionLabel = player.primaryPosition ? PLAYER_POSITION_LABELS[player.primaryPosition as keyof typeof PLAYER_POSITION_LABELS] ?? player.primaryPosition : "Sin posición";
       doc.fontSize(10).fillColor(COLORS.gris);
-      fullWidthText(doc, `${category} · ${player.primaryPosition ?? "Sin posición"} · Dorsal ${player.jerseyNumber ?? "—"}`);
-      doc.moveDown(0.8);
+      fullWidthText(doc, `${category} · ${positionLabel} · Dorsal ${player.jerseyNumber ?? "—"}`);
+      doc.moveDown(0.3);
+      doc.fontSize(10).fillColor(COLORS.carbon).font("Helvetica-Bold");
+      fullWidthText(
+        doc,
+        `Nota Final (Partido): ${evolution.match.notaFinal ?? "—"}   ·   Estatus: ${evolution.match.estatus ? TALENT_STATUS_LABELS[evolution.match.estatus as TalentStatus] : "Sin evaluar"}   ·   Aptitud médica: ${aptitud}`,
+      );
+      doc.font("Helvetica");
+      doc.moveDown(0.6);
 
-      sectionTitle(doc, "Estado general");
-      doc.fontSize(10).fillColor(COLORS.carbon);
-      fullWidthText(doc, `Nota Final: ${latest?.notaFinal ?? "—"}   Estatus: ${latest?.estatus ? TALENT_STATUS_LABELS[latest.estatus as TalentStatus] : "Sin evaluar"}   Aptitud médica: ${aptitud}`);
-      doc.moveDown(0.5);
+      const col1Top = doc.y;
+      let leftY = col1Top;
+      let rightY = col1Top;
 
-      if (radarAxes.some((a) => a.current !== null)) {
-        sectionTitle(doc, "Radar de habilidades");
-        drawRadarChart(doc, radarAxes);
-      }
+      const radarSize = 150;
+      const radarTopPad = 18; // deja lugar a la etiqueta del eje superior del radar, que si no se solapa con el título de la sección
+      leftY = columnSectionTitle(doc, "Radar de Habilidades — Partido", leftX, leftY, colWidth);
+      leftY = drawRadarChart(doc, radarAxesMatch, { size: radarSize, centerX: leftX + colWidth / 2, topY: leftY + radarTopPad }) + 10;
+      leftY = columnSectionTitle(doc, "Radar de Habilidades — Entrenamiento", leftX, leftY, colWidth);
+      leftY = drawRadarChart(doc, radarAxesTraining, { size: radarSize, centerX: leftX + colWidth / 2, topY: leftY + radarTopPad }) + 10;
 
-      sectionTitle(doc, "Historial de Notas Técnicas");
-      if (scoredEvaluations.length === 0) {
-        doc.fontSize(9).fillColor(COLORS.gris);
-        fullWidthText(doc, "Sin evaluaciones registradas.");
+      rightY = columnSectionTitle(
+        doc,
+        `Evaluación Antropométrica${latestAnthro ? ` (${new Date(latestAnthro.date).toLocaleDateString("es-CL")})` : ""}`,
+        rightX,
+        rightY,
+        colWidth,
+      );
+      const cardGap = 6;
+      const cardW = (colWidth - cardGap * 3) / 4;
+      const cardH = 32;
+      const m = latestAnthro?.metrics ?? {};
+      const row1: [string, string][] = [
+        [m.weight !== undefined ? `${m.weight} kg` : "—", "Peso corporal"],
+        [m.height !== undefined ? `${m.height} cm` : "—", "Talla / Altura"],
+        [m.muscleMassPercent !== undefined ? `${m.muscleMassPercent}%` : "—", "T. Muscular"],
+        [m.bodyFatPercent !== undefined ? `${m.bodyFatPercent}%` : "—", "T. Adiposo"],
+      ];
+      const row2: [string, string][] = [
+        [latestAnthro?.imc !== null && latestAnthro?.imc !== undefined ? String(latestAnthro.imc) : "—", "IMC"],
+        [m.skinfoldsSum !== undefined ? `${m.skinfoldsSum}mm` : "—", "S6P (6 pl.)"],
+        [m.imo !== undefined ? String(m.imo) : "—", "Índice IMO"],
+        [m.age !== undefined ? String(m.age) : "—", "Edad (años)"],
+      ];
+      row1.forEach(([value, label], i) => drawStatCard(doc, rightX + i * (cardW + cardGap), rightY, cardW, cardH, value, label));
+      rightY += cardH + cardGap;
+      row2.forEach(([value, label], i) => drawStatCard(doc, rightX + i * (cardW + cardGap), rightY, cardW, cardH, value, label));
+      rightY += cardH + 10;
+
+      rightY = columnSectionTitle(doc, "Historial Comparativo de Mediciones", rightX, rightY, colWidth);
+      if (anthro.length === 0) {
+        rightY = columnText(doc, "Sin mediciones antropométricas registradas.", rightX, rightY, colWidth, { fontSize: 8 });
       } else {
-        for (const { evaluation, notaFinal, estatus } of scoredEvaluations.slice(0, 12)) {
-          ensureSpace(doc, 14);
-          doc.fontSize(9).fillColor(COLORS.carbon);
-          fullWidthText(
+        rightY =
+          drawMiniTable(
             doc,
-            `${new Date(evaluation.date).toLocaleDateString("es-CL")}  ·  ${evaluation.type}  ·  Nota Final ${notaFinal ?? "—"}  ·  ${estatus ? TALENT_STATUS_LABELS[estatus as TalentStatus] : "—"}  ·  Evaluó: ${evaluation.evaluator.firstName} ${evaluation.evaluator.lastName}`,
-          );
+            rightX,
+            rightY,
+            colWidth,
+            ["Fecha", "Peso/Talla", "IMC", "Clasif.", "Evaluador"],
+            anthro.map((r) => [
+              new Date(r.date).toLocaleDateString("es-CL"),
+              `${r.metrics.weight ?? "—"}kg · ${r.metrics.height ?? "—"}cm`,
+              r.imc !== null ? String(r.imc) : "—",
+              r.clasificacion,
+              `${r.recordedBy.firstName} ${r.recordedBy.lastName}`,
+            ]),
+          ) + 8;
+        if (latestAnthro) {
+          const diag = `Composición corporal: ${latestAnthro.clasificacion.toLowerCase()} · ${m.muscleMassPercent !== undefined ? `${m.muscleMassPercent}% masa muscular` : "sin dato de masa muscular"}.`;
+          rightY = columnText(doc, diag, rightX, rightY, colWidth, { fontSize: 8 });
         }
       }
 
-      // Siempre los últimos 4 partidos, con un mini-gráfico de minutos.
-      const recentAppearances = appearances.slice(0, 4);
-      sectionTitle(doc, "Minutos y Partidos");
-      doc.fontSize(9).fillColor(COLORS.carbon);
-      fullWidthText(doc, `Total: ${totalMinutes} min · ${totalGoals} goles · ${totalYellow} amarillas · ${totalRed} rojas`);
-      doc.moveDown(0.4);
-      if (recentAppearances.length === 0) {
-        doc.fontSize(9).fillColor(COLORS.gris);
-        fullWidthText(doc, "Sin partidos registrados.");
+      doc.y = Math.max(leftY, rightY) + 10;
+
+      // ---- Página 2: competencia, salud y cierre ----
+      doc.addPage();
+      addHeader(doc, "Rendimiento en Competencia y Validación", `${player.firstName} ${player.lastName} · ${category}`);
+
+      const hasInjuries = injuries.length > 0;
+      const numCols = hasInjuries ? 3 : 2;
+      const p2ColWidth = (PAGE_CONTENT_WIDTH - colGap * (numCols - 1)) / numCols;
+      const p2Top = doc.y;
+      const colYs: number[] = [];
+
+      // Columna 1: Minutos y Partidos.
+      let cy = p2Top;
+      let cx = PAGE_MARGIN;
+      cy = columnSectionTitle(doc, "Minutos y Partidos", cx, cy, p2ColWidth);
+      const statW = (p2ColWidth - cardGap * 3) / 4;
+      [
+        [String(totalMinutes), "Minutos"],
+        [String(totalGoals), "Goles"],
+        [String(totalYellow), "Amarillas"],
+        [String(totalRed), "Rojas"],
+      ].forEach(([value, label], i) => drawStatCard(doc, cx + i * (statW + cardGap), cy, statW, cardH, value, label));
+      cy += cardH + 10;
+      cy = columnSectionTitle(doc, "Último Encuentro Oficial", cx, cy, p2ColWidth);
+      if (!latestMatch) {
+        cy = columnText(doc, "Sin partidos registrados.", cx, cy, p2ColWidth, { fontSize: 8 });
       } else {
-        for (const a of recentAppearances) {
-          drawBar(doc, `${new Date(a.match.date).toLocaleDateString("es-CL")} ${a.match.opponent}`, a.minutesPlayed, 90, COLORS.rojo);
+        const resultWord =
+          latestMatch.match.teamScore === null
+            ? ""
+            : latestMatch.match.teamScore > latestMatch.match.opponentScore!
+              ? "Triunfo"
+              : latestMatch.match.teamScore < latestMatch.match.opponentScore!
+                ? "Derrota"
+                : "Empate";
+        const scoreLine = latestMatch.match.teamScore !== null ? ` — ${resultWord} ${latestMatch.match.teamScore}-${latestMatch.match.opponentScore}` : "";
+        cy = columnText(
+          doc,
+          `${new Date(latestMatch.match.date).toLocaleDateString("es-CL")} · ${latestMatch.match.isHome ? "vs" : "@"} ${latestMatch.match.opponent}${scoreLine}`,
+          cx,
+          cy,
+          p2ColWidth,
+          { fontSize: 8 },
+        );
+        cy = columnText(doc, `Presencia en cancha: ${latestMatch.minutesPlayed ?? "—"} minutos disputados.`, cx, cy, p2ColWidth, { fontSize: 8 });
+        cy = columnText(doc, `Aporte ofensivo: ${latestMatch.goals} gol(es).`, cx, cy, p2ColWidth, { fontSize: 8 });
+        cy = columnText(
+          doc,
+          `Disciplina: ${latestMatch.yellowCards ? `${latestMatch.yellowCards} amarilla(s)` : "sin amonestaciones"}${latestMatch.redCard ? " · expulsión" : ""}.`,
+          cx,
+          cy,
+          p2ColWidth,
+          { fontSize: 8 },
+        );
+      }
+      colYs.push(cy);
+
+      // Columna 2 (solo si hay lesiones): Historial de Lesiones.
+      if (hasInjuries) {
+        cx = PAGE_MARGIN + p2ColWidth + colGap;
+        cy = p2Top;
+        cy = columnSectionTitle(doc, "Historial de Lesiones", cx, cy, p2ColWidth);
+        const i = latestInjury!;
+        const recoveryDays = i.actualReturnDate ? Math.round((new Date(i.actualReturnDate).getTime() - new Date(i.date).getTime()) / 86_400_000) : null;
+        cy = columnText(doc, `${i.injuryType ?? i.description} — ${i.bodyPart ?? "sin zona registrada"}`, cx, cy, p2ColWidth, { fontSize: 8.5 });
+        cy = columnText(doc, `Fecha: ${new Date(i.date).toLocaleDateString("es-CL")}`, cx, cy, p2ColWidth, { fontSize: 8 });
+        cy = columnText(doc, `Tratamiento: ${i.treatment ?? "Sin tratamiento registrado"}.`, cx, cy, p2ColWidth, { fontSize: 8 });
+        cy = columnText(
+          doc,
+          `Tiempo de recuperación: ${recoveryDays !== null ? `${recoveryDays} día(s) de baja deportiva.` : "en curso."}`,
+          cx,
+          cy,
+          p2ColWidth,
+          { fontSize: 8 },
+        );
+        cy = columnText(doc, `Profesional responsable: ${i.responsibleProfessional ?? "No registrado"}.`, cx, cy, p2ColWidth, { fontSize: 8 });
+        if (injuries.length > 1) {
+          const others = injuries
+            .slice(1, 4)
+            .map((oi) => oi.injuryType ?? oi.description)
+            .join(", ");
+          cy = columnText(doc, `Lesiones anteriores: ${others}.`, cx, cy, p2ColWidth, { fontSize: 7.5 });
         }
-        doc.moveDown(0.3);
-        for (const a of recentAppearances) {
-          ensureSpace(doc, 14);
-          const scoreLine = a.match.teamScore !== null ? ` (${a.match.teamScore}-${a.match.opponentScore})` : "";
-          doc.fontSize(9).fillColor(COLORS.carbon);
-          fullWidthText(
-            doc,
-            `${new Date(a.match.date).toLocaleDateString("es-CL")}  ·  ${a.match.isHome ? "vs" : "@"} ${a.match.opponent}${scoreLine}  ·  ${a.minutesPlayed ?? "—"} min  ·  ${a.goals} goles${a.yellowCards ? `  ·  ${a.yellowCards} amarilla(s)` : ""}${a.redCard ? "  ·  roja" : ""}`,
-          );
-        }
+        colYs.push(cy);
       }
 
-      // Solo aparece si el jugador tuvo lesiones — nunca una sección vacía.
-      if (injuries.length > 0) {
-        sectionTitle(doc, "Historial de Lesiones");
-        const withRecovery = injuries
-          .filter((i) => i.actualReturnDate)
-          .map((i) => ({
-            label: `${i.injuryType ?? i.description} (${i.bodyPart ?? "—"})`,
-            days: Math.round((new Date(i.actualReturnDate!).getTime() - new Date(i.date).getTime()) / 86_400_000),
-          }));
-        if (withRecovery.length > 0) {
-          const maxDays = Math.max(...withRecovery.map((r) => r.days), 1);
-          for (const r of withRecovery) drawBar(doc, r.label, r.days, maxDays, COLORS.rojoOscuro);
-          doc.moveDown(0.3);
-        }
-        for (const i of injuries.slice(0, 10)) {
-          ensureSpace(doc, 14);
-          const recoveryDays = i.actualReturnDate ? Math.round((new Date(i.actualReturnDate).getTime() - new Date(i.date).getTime()) / 86_400_000) : null;
-          doc.fontSize(9).fillColor(COLORS.carbon);
-          fullWidthText(
-            doc,
-            `${new Date(i.date).toLocaleDateString("es-CL")}  ·  ${i.injuryType ?? i.description}  ·  ${i.bodyPart ?? "—"}  ·  ${i.treatment ?? "Sin tratamiento registrado"}  ·  ${recoveryDays !== null ? `${recoveryDays} días de recuperación` : "En curso"}`,
-          );
-        }
-      }
+      // Última columna: Observaciones.
+      cx = PAGE_MARGIN + (numCols - 1) * (p2ColWidth + colGap);
+      cy = p2Top;
+      cy = columnSectionTitle(doc, "Observaciones", cx, cy, p2ColWidth);
+      cy = columnText(doc, latestObservation ?? "Sin observaciones registradas.", cx, cy, p2ColWidth, { fontSize: 8 });
+      colYs.push(cy);
 
+      doc.y = Math.max(...colYs) + 10;
       addSignatureBlock(doc);
     });
   }
@@ -172,6 +291,7 @@ export class ReportsService {
       this.prisma.evaluationDimension.findMany({ where: { isActive: true } }),
     ]);
     const weightByDimension = new Map(dimensions.map((d) => [d.id, d.weight]));
+    const keyByDimension = new Map(dimensions.map((d) => [d.id, d.key]));
     const playerIds = players.map((p) => p.id);
 
     const [evaluations, nutritionRecords, injuries, appearances] = await Promise.all([
@@ -203,10 +323,11 @@ export class ReportsService {
         }
         const dimensionAverages = Array.from(byDimension.entries()).map(([dimensionId, values]) => ({
           dimensionId,
+          key: keyByDimension.get(dimensionId) ?? "",
           weight: weightByDimension.get(dimensionId) ?? 0,
           average: values.reduce((a, b) => a + b, 0) / values.length,
         }));
-        notaFinal = computeNotaFinal(dimensionAverages);
+        notaFinal = computeNotaFinalForType(dimensionAverages, ev.type);
         estatus = computeTalentStatus(notaFinal);
       }
       const nutrition = latestNutritionByPlayer.get(p.id);

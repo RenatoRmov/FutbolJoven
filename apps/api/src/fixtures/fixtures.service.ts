@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PERMISSIONS } from "@futboljoven/shared";
 import type { CreateMatchDto, RecordMatchResultDto, UpdateMatchDto } from "@futboljoven/shared";
 import { PrismaService } from "../prisma/prisma.service";
@@ -62,6 +62,9 @@ export class FixturesService {
     if (!before) throw new NotFoundException("Partido no encontrado");
     assertTeamInScope(user, before.teamId, PERMISSIONS.FIXTURES_MANAGE_ALL, PERMISSIONS.FIXTURES_MANAGE_ASSIGNED);
 
+    const startingElevenCount = dto.appearances.filter((a) => a.startingEleven).length;
+    if (startingElevenCount > 11) throw new BadRequestException("No puede haber más de 11 titulares");
+
     const match = await this.prisma.$transaction(async (tx) => {
       await tx.matchAppearance.deleteMany({ where: { matchId: id } });
       await tx.match.update({
@@ -73,6 +76,7 @@ export class FixturesService {
           matchId: id,
           playerId: a.playerId,
           started: a.started,
+          startingEleven: a.startingEleven && a.started,
           minutesPlayed: a.minutesPlayed ?? null,
           goals: a.goals,
           yellowCards: a.yellowCards,

@@ -31,6 +31,7 @@ describe("FutbolJoven API (e2e)", () => {
   let playerAId: string;
   let dimensionId: string;
   let physicalDimensionId: string;
+  let performanceDimensionId: string;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -158,6 +159,10 @@ describe("FutbolJoven API (e2e)", () => {
       data: { key: "physical", name: "Física", order: 2, weight: 0.5, scaleId: scale.id },
     });
     physicalDimensionId = physicalDimension.id;
+    const performanceDimension = await prisma.evaluationDimension.create({
+      data: { key: "performance", name: "Rendimiento / Minutos", order: 3, weight: 0.2, scaleId: scale.id },
+    });
+    performanceDimensionId = performanceDimension.id;
 
     void coachUser;
   }
@@ -266,8 +271,9 @@ describe("FutbolJoven API (e2e)", () => {
 
       const res = await request(app.getHttpServer()).get(`/api/evaluations/player/${playerAId}/evolution`).set("Cookie", coachCookie);
       expect(res.status).toBe(200);
-      expect(res.body.radar[0].value).toBe(8);
-      expect(res.body.previousRadar[0].value).toBe(6);
+      expect(res.body.match.radar[0].value).toBe(8);
+      expect(res.body.match.previousRadar[0].value).toBe(6);
+      expect(res.body.training.radar[0].value).toBeNull();
     });
 
     it("blocks a coach from evaluating a player in another team", async () => {
@@ -587,6 +593,93 @@ describe("FutbolJoven API (e2e)", () => {
       // The injury history section adds a bar chart + text block; a compressed PDF with it
       // present is meaningfully larger than the same report without any injuries.
       expect(afterRes.body.length).toBeGreaterThan(beforeSize);
+    });
+  });
+
+  describe("Fase 5 — Entrenamiento vs Partido, Titular, PDF rediseñado", () => {
+    it("reweights the Nota Final for a TRAINING evaluation, excluding the 'performance' dimension", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/api/evaluations")
+        .set("Cookie", coachCookie)
+        .send({
+          playerId: playerAId,
+          teamId: teamAId,
+          date: "2026-06-01",
+          type: "TRAINING",
+          scores: [
+            { dimensionId, value: 8 },
+            { dimensionId: physicalDimensionId, value: 6 },
+            { dimensionId: performanceDimensionId, value: 10 },
+          ],
+        });
+      expect(res.status).toBe(201);
+      // Técnica 8*0.5 + Física 6*0.5 = 7.0 — "Rendimiento" (10) queda excluido, no 9.0.
+      expect(res.body.notaFinal).toBe(7);
+    });
+
+    it("computes the evolution radar separately for MATCH and TRAINING evaluations", async () => {
+      const res = await request(app.getHttpServer()).get(`/api/evaluations/player/${playerAId}/evolution`).set("Cookie", coachCookie);
+      expect(res.status).toBe(200);
+      expect(res.body.match).toBeDefined();
+      expect(res.body.training).toBeDefined();
+      // El puntaje de Física en Entrenamiento (6) no debe filtrarse al radar de Partido.
+      const trainingPhysical = res.body.training.radar.find((r: any) => r.dimensionKey === "physical");
+      expect(trainingPhysical.value).toBe(6);
+    });
+
+    it("rejects a match result with more than 11 starting-eleven players", async () => {
+      const createRes = await request(app.getHttpServer())
+        .post("/api/fixtures")
+        .set("Cookie", coachCookie)
+        .send({ teamId: teamAId, opponent: "Rival Titulares", date: "2026-10-15" });
+      const matchId = createRes.body.id;
+
+      const players = await Promise.all(
+        Array.from({ length: 12 }, (_, i) =>
+          request(app.getHttpServer())
+            .post("/api/players")
+            .set("Cookie", adminCookie)
+            .send({ firstName: `Titular${i}`, lastName: "Test", birthDate: "2011-01-01", joinDate: "2026-01-01", teamId: teamAId }),
+        ),
+      );
+
+      const resultRes = await request(app.getHttpServer())
+        .post(`/api/fixtures/${matchId}/result`)
+        .set("Cookie", coachCookie)
+        .send({
+          teamScore: 1,
+          opponentScore: 0,
+          appearances: players.map((p) => ({ playerId: p.body.id, started: true, startingEleven: true, minutesPlayed: 90 })),
+        });
+      expect(resultRes.status).toBe(400);
+    });
+
+    it("accepts a match result with exactly 11 starting-eleven players", async () => {
+      const createRes = await request(app.getHttpServer())
+        .post("/api/fixtures")
+        .set("Cookie", coachCookie)
+        .send({ teamId: teamAId, opponent: "Rival Once", date: "2026-10-16" });
+      const matchId = createRes.body.id;
+
+      const players = await Promise.all(
+        Array.from({ length: 11 }, (_, i) =>
+          request(app.getHttpServer())
+            .post("/api/players")
+            .set("Cookie", adminCookie)
+            .send({ firstName: `Once${i}`, lastName: "Test", birthDate: "2011-01-01", joinDate: "2026-01-01", teamId: teamAId }),
+        ),
+      );
+
+      const resultRes = await request(app.getHttpServer())
+        .post(`/api/fixtures/${matchId}/result`)
+        .set("Cookie", coachCookie)
+        .send({
+          teamScore: 1,
+          opponentScore: 0,
+          appearances: players.map((p) => ({ playerId: p.body.id, started: true, startingEleven: true, minutesPlayed: 90 })),
+        });
+      expect(resultRes.status).toBe(201);
+      expect(resultRes.body.appearances.every((a: any) => a.startingEleven)).toBe(true);
     });
   });
 });
