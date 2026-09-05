@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const [email, setEmail] = useState("admin@futboljoven.demo");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -55,16 +55,6 @@ export default function LoginPage() {
             </form>
           </CardContent>
         </Card>
-
-        <div className="mt-5 rounded-lg border border-borde bg-white p-3 text-xs text-gris">
-          <p className="mb-1.5 font-medium text-gris">Usuarios demo (contraseña: Demo1234!)</p>
-          <ul className="space-y-0.5">
-            <li>admin@futboljoven.demo — Super Admin</li>
-            <li>director@futboljoven.demo — Director Deportivo</li>
-            <li>coach1@futboljoven.demo — Profesor / Entrenador</li>
-            <li>nutricion@futboljoven.demo — Nutricionista</li>
-          </ul>
-        </div>
       </div>
     </div>
   );
