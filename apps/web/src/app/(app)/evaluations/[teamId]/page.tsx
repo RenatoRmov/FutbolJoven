@@ -139,10 +139,13 @@ export default function QuickEvaluationPage() {
     api.get<Match>(`/fixtures/${context}`).then(setContextMatch);
   }, [type, context]);
 
-  // Cuando hay un partido de Contexto seleccionado, solo se puede evaluar a
-  // los jugadores citados a ese partido (los demás no jugaron).
+  // Cuando hay un partido de Contexto seleccionado Y ya tiene resultado
+  // cargado, solo se puede evaluar a los jugadores citados a ese partido
+  // (los demás no jugaron). Si el partido todavía no se jugó (sin citados
+  // cargados todavía), no bloqueamos la carga — se muestra el plantel
+  // completo, igual que sin Contexto.
   const citadoIds = useMemo(() => {
-    if (type !== "MATCH" || !context || !contextMatch) return null;
+    if (type !== "MATCH" || !context || !contextMatch || contextMatch.status !== "PLAYED") return null;
     return new Set(contextMatch.appearances?.filter((a) => a.started).map((a) => a.playerId) ?? []);
   }, [type, context, contextMatch]);
 
@@ -269,10 +272,13 @@ export default function QuickEvaluationPage() {
         {players && players.length === 0 && <EmptyState title="Este equipo no tiene jugadores cargados" />}
 
         {type === "MATCH" && context && contextMatch && contextMatch.status !== "PLAYED" && (
-          <EmptyState title="Cargá primero el resultado de este partido en Fixture para poder evaluar a los citados" />
+          <p className="text-sm text-gris">
+            Este partido todavía no tiene resultado cargado en Fixture — se muestra todo el plantel. Una vez cargado el
+            resultado, acá solo van a aparecer los jugadores citados.
+          </p>
         )}
 
-        {players && players.length > 0 && evaluablePlayers && (context === "" || type !== "MATCH" || (contextMatch && contextMatch.status === "PLAYED")) && (
+        {players && players.length > 0 && evaluablePlayers && (
           <Table>
             <Thead>
               <Tr>
