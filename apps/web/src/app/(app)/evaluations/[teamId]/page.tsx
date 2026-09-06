@@ -11,6 +11,7 @@ import { Skeleton, EmptyState } from "@/components/ui/Skeleton";
 import { Modal, HelpButton } from "@/components/ui/Modal";
 import { api, ApiError } from "@/lib/api-client";
 import { Player, Team } from "@/lib/types";
+import { formatDate } from "@/lib/date";
 import { EVALUATION_TYPES } from "@futboljoven/shared";
 
 interface Dimension {
@@ -115,6 +116,7 @@ export default function QuickEvaluationPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
+  const [rowStatus, setRowStatus] = useState<Record<string, "saving" | "saved" | "error">>({});
 
   useEffect(() => {
     if (!teamId) return;
@@ -164,31 +166,49 @@ export default function QuickEvaluationPage() {
     setScores((prev) => ({ ...prev, [playerId]: { ...prev[playerId], [dimensionId]: value } }));
   }
 
+  function buildEntry(p: Player) {
+    const playerScores = scores[p.id] ?? {};
+    return {
+      playerId: p.id,
+      observation: observations[p.id] || null,
+      scores: dimensions.map((d) => {
+        const raw = playerScores[d.id];
+        const value = d.key !== "performance" ? raw ?? midValue : type === "TRAINING" ? daysToScore(raw ?? 0) : minutesToScore(raw ?? 0);
+        return { dimensionId: d.id, value };
+      }),
+    };
+  }
+
+  function buildContextLabel(): string | null {
+    const contextLabel = context ? matches.find((m) => m.id === context) : null;
+    return contextLabel ? `${formatDate(contextLabel.date)} ${contextLabel.isHome ? "vs" : "@"} ${contextLabel.opponent}` : null;
+  }
+
+  function clearPlayerDraft(playerId: string) {
+    setScores((prev) => {
+      const next = { ...prev };
+      delete next[playerId];
+      return next;
+    });
+    setObservations((prev) => {
+      const next = { ...prev };
+      delete next[playerId];
+      return next;
+    });
+  }
+
   async function handleSubmit() {
     if (!evaluablePlayers) return;
     setError(null);
     setSuccess(null);
     setSaving(true);
     try {
-      const contextLabel = context ? matches.find((m) => m.id === context) : null;
-      const entries = evaluablePlayers.map((p) => {
-        const playerScores = scores[p.id] ?? {};
-        return {
-          playerId: p.id,
-          observation: observations[p.id] || null,
-          scores: dimensions.map((d) => {
-            const raw = playerScores[d.id];
-            const value = d.key !== "performance" ? raw ?? midValue : type === "TRAINING" ? daysToScore(raw ?? 0) : minutesToScore(raw ?? 0);
-            return { dimensionId: d.id, value };
-          }),
-        };
-      });
-
+      const entries = evaluablePlayers.map(buildEntry);
       await api.post("/evaluations/quick", {
         teamId,
         date,
         type,
-        context: contextLabel ? `${new Date(contextLabel.date).toLocaleDateString("es-CL")} ${contextLabel.isHome ? "vs" : "@"} ${contextLabel.opponent}` : null,
+        context: buildContextLabel(),
         entries,
       });
       setSuccess(`Se guardaron ${entries.length} evaluaciones.`);
@@ -201,6 +221,25 @@ export default function QuickEvaluationPage() {
     }
   }
 
+  async function handleSubmitOne(playerId: string) {
+    const p = evaluablePlayers?.find((pl) => pl.id === playerId);
+    if (!p) return;
+    setRowStatus((prev) => ({ ...prev, [playerId]: "saving" }));
+    try {
+      await api.post("/evaluations/quick", {
+        teamId,
+        date,
+        type,
+        context: buildContextLabel(),
+        entries: [buildEntry(p)],
+      });
+      setRowStatus((prev) => ({ ...prev, [playerId]: "saved" }));
+      clearPlayerDraft(playerId);
+    } catch (err) {
+      setRowStatus((prev) => ({ ...prev, [playerId]: "error" }));
+    }
+  }
+
   return (
     <div>
       <Header title={team ? `Evaluación rápida — ${team.name}` : "Evaluación rápida"} />
@@ -209,9 +248,18 @@ export default function QuickEvaluationPage() {
           <Button variant="ghost" size="sm" onClick={() => router.push("/evaluations")}>
             ← Volver a categorías
           </Button>
-          <div className="flex items-center gap-2 text-sm text-gris">
-            <span>¿Qué evalúa cada dimensión?</span>
-            <HelpButton onClick={() => setGlossaryOpen(true)} />
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => api.download(`/export/evaluations?teamId=${teamId}`, `evaluaciones-${team?.name ?? teamId}.xlsx`)}
+            >
+              Exportar Excel
+            </Button>
+            <div className="flex items-center gap-2 text-sm text-gris">
+              <span>¿Qué evalúa cada dimensión?</span>
+              <HelpButton onClick={() => setGlossaryOpen(true)} />
+            </div>
           </div>
         </div>
 
@@ -245,7 +293,7 @@ export default function QuickEvaluationPage() {
                   <option value="">Sin partido asociado</option>
                   {matches.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {new Date(m.date).toLocaleDateString("es-CL")} {m.isHome ? "vs" : "@"} {m.opponent}
+                      {formatDate(m.date)} {m.isHome ? "vs" : "@"} {m.opponent}
                       {m.status === "SCHEDULED" ? " (programado)" : m.status === "PLAYED" ? " (jugado)" : ""}
                     </option>
                   ))}
@@ -287,12 +335,13 @@ export default function QuickEvaluationPage() {
                   <Th key={d.id}>{d.key === "performance" ? (type === "TRAINING" ? "Días entrenados (mes)" : "Minutos jugados") : d.name}</Th>
                 ))}
                 <Th>Observación</Th>
+                <Th>Guardar</Th>
               </Tr>
             </Thead>
             <Tbody>
               {evaluablePlayers.length === 0 && (
                 <Tr>
-                  <Td colSpan={dimensions.length + 2} className="text-center text-sm text-gris">
+                  <Td colSpan={dimensions.length + 3} className="text-center text-sm text-gris">
                     Ningún jugador citado a este partido.
                   </Td>
                 </Tr>
@@ -338,6 +387,16 @@ export default function QuickEvaluationPage() {
                       value={observations[p.id] ?? ""}
                       onChange={(e) => setObservations((prev) => ({ ...prev, [p.id]: e.target.value }))}
                     />
+                  </Td>
+                  <Td>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={rowStatus[p.id] === "saving"}
+                      onClick={() => handleSubmitOne(p.id)}
+                    >
+                      {rowStatus[p.id] === "saving" ? "Guardando..." : rowStatus[p.id] === "saved" ? "Guardado ✓" : rowStatus[p.id] === "error" ? "Reintentar" : "Guardar"}
+                    </Button>
                   </Td>
                 </Tr>
               ))}

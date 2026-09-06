@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Skeleton, EmptyState } from "@/components/ui/Skeleton";
 import { api, ApiError } from "@/lib/api-client";
 import { Player, Team } from "@/lib/types";
+import { formatDate } from "@/lib/date";
 
 interface Match {
   id: string;
@@ -202,9 +203,9 @@ export default function TeamFixturePage() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => api.download(`/reports/teams/${team.id}/pdf`, `reporte-${team.name}.pdf`)}
+              onClick={() => api.download(`/reports/teams/${team.id}/fixture-pdf`, `fixture-${team.name}.pdf`)}
             >
-              Exportar PDF de categoría
+              Exportar fixture completo
             </Button>
           )}
         </div>
@@ -397,7 +398,7 @@ function MatchCard({
               {match.isHome ? "vs" : "@"} {match.opponent}
             </p>
             <p className="text-xs text-gris">
-              {new Date(match.date).toLocaleDateString("es-AR")}
+              {formatDate(match.date, "es-AR")}
               {match.meetingTime && ` · Citación ${match.meetingTime}`}
               {match.kickoffTime && ` · Partido ${match.kickoffTime}`}
               {match.city && ` · ${match.city}`}
@@ -444,6 +445,13 @@ function MatchCard({
                 {expanded ? "Cerrar" : "Cargar resultado"}
               </Button>
             )}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => api.download(`/reports/matches/${match.id}/pdf`, `partido-${match.opponent}.pdf`)}
+            >
+              Exportar
+            </Button>
             <Button size="sm" variant="ghost" onClick={onToggleEdit}>
               {editing ? "Cerrar" : "Editar"}
             </Button>

@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { computeNotaFinalForType, computeTalentStatus, PERMISSIONS, PLAYER_POSITION_LABELS, TALENT_STATUS_LABELS } from "@futboljoven/shared";
+import { computeNotaFinalForType, computeTalentStatus, MATCH_STATUS_LABELS, PERMISSIONS, PLAYER_POSITION_LABELS, TALENT_STATUS_LABELS } from "@futboljoven/shared";
 import type { TalentStatus } from "@futboljoven/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { assertTeamInScope } from "../common/scope.util";
 import { EvaluationsService } from "../evaluations/evaluations.service";
+import { FinanceService } from "../finance/finance.service";
 import type { AuthenticatedUser } from "../auth/auth.types";
 import {
   addHeader,
@@ -16,6 +17,7 @@ import {
   drawRadarChart,
   drawStatCard,
   ensureSpace,
+  formatDate,
   fullWidthText,
   renderPdfToBuffer,
   sectionTitle,
@@ -26,11 +28,16 @@ import type { RadarAxis } from "./pdf.util";
 const PAGE_MARGIN = 40;
 const PAGE_CONTENT_WIDTH = 595.28 - PAGE_MARGIN * 2;
 
+function formatCLP(value: number): string {
+  return value.toLocaleString("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 });
+}
+
 @Injectable()
 export class ReportsService {
   constructor(
     private prisma: PrismaService,
     private evaluationsService: EvaluationsService,
+    private financeService: FinanceService,
   ) {}
 
   async buildPlayerReportPdf(user: AuthenticatedUser, playerId: string): Promise<Buffer> {
@@ -49,7 +56,7 @@ export class ReportsService {
       this.prisma.evaluation.findMany({
         where: { playerId },
         include: { scores: { include: { dimension: true } }, evaluator: { select: { firstName: true, lastName: true } } },
-        orderBy: { date: "desc" },
+        orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       }),
       this.prisma.matchAppearance.findMany({
         where: { playerId },
@@ -131,7 +138,7 @@ export class ReportsService {
 
       rightY = columnSectionTitle(
         doc,
-        `Evaluación Antropométrica${latestAnthro ? ` (${new Date(latestAnthro.date).toLocaleDateString("es-CL")})` : ""}`,
+        `Evaluación Antropométrica${latestAnthro ? ` (${formatDate(latestAnthro.date)})` : ""}`,
         rightX,
         rightY,
         colWidth,
@@ -169,7 +176,7 @@ export class ReportsService {
             colWidth,
             ["Fecha", "Peso/Talla", "IMC", "Clasif.", "Evaluador"],
             anthro.map((r) => [
-              new Date(r.date).toLocaleDateString("es-CL"),
+              formatDate(r.date),
               `${r.metrics.weight ?? "—"}kg · ${r.metrics.height ?? "—"}cm`,
               r.imc !== null ? String(r.imc) : "—",
               r.clasificacion,
@@ -221,7 +228,7 @@ export class ReportsService {
         const scoreLine = latestMatch.match.teamScore !== null ? ` — ${resultWord} ${latestMatch.match.teamScore}-${latestMatch.match.opponentScore}` : "";
         cy = columnText(
           doc,
-          `${new Date(latestMatch.match.date).toLocaleDateString("es-CL")} · ${latestMatch.match.isHome ? "vs" : "@"} ${latestMatch.match.opponent}${scoreLine}`,
+          `${formatDate(latestMatch.match.date)} · ${latestMatch.match.isHome ? "vs" : "@"} ${latestMatch.match.opponent}${scoreLine}`,
           cx,
           cy,
           p2ColWidth,
@@ -248,7 +255,7 @@ export class ReportsService {
         const i = latestInjury!;
         const recoveryDays = i.actualReturnDate ? Math.round((new Date(i.actualReturnDate).getTime() - new Date(i.date).getTime()) / 86_400_000) : null;
         cy = columnText(doc, `${i.injuryType ?? i.description} — ${i.bodyPart ?? "sin zona registrada"}`, cx, cy, p2ColWidth, { fontSize: 8.5 });
-        cy = columnText(doc, `Fecha: ${new Date(i.date).toLocaleDateString("es-CL")}`, cx, cy, p2ColWidth, { fontSize: 8 });
+        cy = columnText(doc, `Fecha: ${formatDate(i.date)}`, cx, cy, p2ColWidth, { fontSize: 8 });
         cy = columnText(doc, `Tratamiento: ${i.treatment ?? "Sin tratamiento registrado"}.`, cx, cy, p2ColWidth, { fontSize: 8 });
         cy = columnText(
           doc,
@@ -295,7 +302,11 @@ export class ReportsService {
     const playerIds = players.map((p) => p.id);
 
     const [evaluations, nutritionRecords, injuries, appearances] = await Promise.all([
-      this.prisma.evaluation.findMany({ where: { playerId: { in: playerIds } }, include: { scores: true }, orderBy: { date: "desc" } }),
+      this.prisma.evaluation.findMany({
+        where: { playerId: { in: playerIds } },
+        include: { scores: true },
+        orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+      }),
       this.prisma.nutritionRecord.findMany({ where: { playerId: { in: playerIds } }, orderBy: { date: "desc" } }),
       this.prisma.injury.findMany({ where: { playerId: { in: playerIds } }, orderBy: { date: "desc" } }),
       this.prisma.matchAppearance.findMany({ where: { playerId: { in: playerIds } } }),
@@ -422,7 +433,7 @@ export class ReportsService {
           ensureSpace(doc, 14);
           const row = cols.map(([key]) => (r.metrics[key] !== undefined ? String(r.metrics[key]) : "—"));
           doc.fontSize(8).fillColor(COLORS.carbon);
-          fullWidthText(doc, `${new Date(r.date).toLocaleDateString("es-CL")}   ${row.join("      ")}`);
+          fullWidthText(doc, `${formatDate(r.date)}   ${row.join("      ")}`);
         }
 
         const latest = parsed[parsed.length - 1].metrics;
@@ -430,6 +441,200 @@ export class ReportsService {
           sectionTitle(doc, "Última medición");
           if (latest.cmj !== undefined) drawBar(doc, "CMJ (cm)", latest.cmj, Math.max(...parsed.map((p) => p.metrics.cmj ?? 0), 40), COLORS.rojo);
           if (latest.vift !== undefined) drawBar(doc, "VIFT (km/h)", latest.vift, Math.max(...parsed.map((p) => p.metrics.vift ?? 0), 25), COLORS.dorado);
+        }
+      }
+
+      addSignatureBlock(doc);
+    });
+  }
+
+  /**
+   * One match, full detail: rival/fecha/condición/logística, cuerpo técnico,
+   * traslados (si es de visita) y la nómina completa de citados/titulares.
+   */
+  async buildMatchReportPdf(user: AuthenticatedUser, matchId: string): Promise<Buffer> {
+    const match = await this.prisma.match.findUnique({
+      where: { id: matchId },
+      include: {
+        team: { include: { category: true } },
+        appearances: { include: { player: { select: { firstName: true, lastName: true } } } },
+      },
+    });
+    if (!match) throw new NotFoundException("Partido no encontrado");
+    assertTeamInScope(user, match.teamId, PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED);
+
+    return renderPdfToBuffer((doc) => {
+      addHeader(doc, `${match.isHome ? "vs" : "@"} ${match.opponent}`, `${match.team.name}${match.team.category ? ` — ${match.team.category.name}` : ""}`);
+      this.drawMatchDetail(doc, match, { includeRoster: true });
+      addSignatureBlock(doc);
+    });
+  }
+
+  /**
+   * Fixture completo de un equipo: página 1 con el resumen de la temporada
+   * (como el reporte de categoría existente), y una página por partido con
+   * el mismo detalle que el export individual — sin la nómina de citados,
+   * para mantener el archivo liviano (ya cubierta por el export partido a partido).
+   */
+  async buildFixtureReportPdf(user: AuthenticatedUser, teamId: string): Promise<Buffer> {
+    assertTeamInScope(user, teamId, PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED);
+    const team = await this.prisma.team.findUnique({ where: { id: teamId }, include: { category: true, season: true } });
+    if (!team) throw new NotFoundException("Equipo no encontrado");
+
+    const matches = await this.prisma.match.findMany({ where: { teamId }, orderBy: { date: "asc" } });
+
+    return renderPdfToBuffer((doc) => {
+      addHeader(doc, "Fixture de temporada", `${team.name}${team.category ? ` — ${team.category.name}` : ""}${team.season ? ` · ${team.season.name}` : ""}`);
+
+      sectionTitle(doc, "Resumen de partidos");
+      if (matches.length === 0) {
+        doc.fontSize(9).fillColor(COLORS.gris);
+        fullWidthText(doc, "Sin partidos cargados.");
+      } else {
+        doc.fontSize(8).fillColor(COLORS.rojoOscuro).font("Helvetica-Bold");
+        fullWidthText(doc, "Fecha        Rival                            Cond.    Resultado    Estado");
+        doc.font("Helvetica");
+        for (const m of matches) {
+          ensureSpace(doc, 14);
+          const scoreLine = m.status === "PLAYED" ? `${m.teamScore ?? "-"} - ${m.opponentScore ?? "-"}` : "—";
+          doc.fontSize(8).fillColor(COLORS.carbon);
+          fullWidthText(
+            doc,
+            `${formatDate(m.date)}   ${m.opponent.padEnd(28).slice(0, 28)}   ${m.isHome ? "Local " : "Visita"}   ${scoreLine.padEnd(10)}   ${MATCH_STATUS_LABELS[m.status as keyof typeof MATCH_STATUS_LABELS] ?? m.status}`,
+          );
+        }
+      }
+
+      for (const match of matches) {
+        doc.addPage();
+        addHeader(doc, `${match.isHome ? "vs" : "@"} ${match.opponent}`, formatDate(match.date));
+        this.drawMatchDetail(doc, match, { includeRoster: false });
+      }
+
+      addSignatureBlock(doc);
+    });
+  }
+
+  /** Shared match-detail block used by both buildMatchReportPdf and buildFixtureReportPdf. */
+  private drawMatchDetail(doc: PDFKit.PDFDocument, match: any, options: { includeRoster: boolean }) {
+    sectionTitle(doc, "Datos del partido");
+    const infoRows: [string, string | null | undefined][] = [
+      ["Fecha", formatDate(match.date)],
+      ["Condición", match.isHome ? "Local" : "Visita"],
+      ["Estado", MATCH_STATUS_LABELS[match.status as keyof typeof MATCH_STATUS_LABELS] ?? match.status],
+      ["Ciudad", match.city],
+      ["Estadio", match.venue],
+      ["Hora de citación", match.meetingTime],
+      ["Hora de partido", match.kickoffTime],
+    ];
+    if (match.status === "PLAYED") {
+      infoRows.push(["Resultado", `${match.teamScore ?? "-"} - ${match.opponentScore ?? "-"}`]);
+    }
+    for (const [label, value] of infoRows) {
+      if (!value) continue;
+      ensureSpace(doc, 14);
+      doc.fontSize(9).fillColor(COLORS.gris).font("Helvetica-Bold");
+      doc.text(label, PAGE_MARGIN, doc.y, { continued: true, width: 140 });
+      doc.font("Helvetica").fillColor(COLORS.carbon).text(`: ${value}`);
+    }
+
+    sectionTitle(doc, "Cuerpo técnico");
+    const staffRows: [string, string | null | undefined][] = [
+      ["Entrenador", match.coachName],
+      ["Preparador físico", match.physicalTrainerName],
+      ["Kinesiólogo", match.kineName],
+      ["Utilero", match.equipmentManagerName],
+      ["Otro", match.otherStaffNotes],
+    ];
+    const anyStaff = staffRows.some(([, v]) => v);
+    if (!anyStaff) {
+      doc.fontSize(9).fillColor(COLORS.gris);
+      fullWidthText(doc, "Sin datos de cuerpo técnico cargados.");
+    } else {
+      for (const [label, value] of staffRows) {
+        if (!value) continue;
+        ensureSpace(doc, 14);
+        doc.fontSize(9).fillColor(COLORS.gris).font("Helvetica-Bold");
+        doc.text(label, PAGE_MARGIN, doc.y, { continued: true, width: 140 });
+        doc.font("Helvetica").fillColor(COLORS.carbon).text(`: ${value}`);
+      }
+    }
+
+    if (!match.isHome) {
+      const travelRows: [string, string | null | undefined][] = [
+        ["Presentación cuerpo técnico", match.techStaffArrivalTime],
+        ["Presentación jugadores", match.playersArrivalTime],
+        ["Salida del bus", match.busDepartureTime],
+        ["Punto de encuentro", match.meetingPoint],
+        ["Hotel", match.hotelNameAddress],
+      ];
+      if (travelRows.some(([, v]) => v)) {
+        sectionTitle(doc, "Traslados y alojamiento");
+        for (const [label, value] of travelRows) {
+          if (!value) continue;
+          ensureSpace(doc, 14);
+          doc.fontSize(9).fillColor(COLORS.gris).font("Helvetica-Bold");
+          doc.text(label, PAGE_MARGIN, doc.y, { continued: true, width: 140 });
+          doc.font("Helvetica").fillColor(COLORS.carbon).text(`: ${value}`);
+        }
+      }
+    }
+
+    if (options.includeRoster) {
+      sectionTitle(doc, "Jugadores citados");
+      const appearances = (match.appearances ?? []) as { started: boolean; startingEleven: boolean; minutesPlayed: number | null; goals: number; yellowCards: number; redCard: boolean; player: { firstName: string; lastName: string } }[];
+      if (appearances.length === 0) {
+        doc.fontSize(9).fillColor(COLORS.gris);
+        fullWidthText(doc, "Sin citación cargada.");
+      } else {
+        const sorted = [...appearances].sort((a, b) => a.player.lastName.localeCompare(b.player.lastName));
+        doc.fontSize(8).fillColor(COLORS.rojoOscuro).font("Helvetica-Bold");
+        fullWidthText(doc, "Jugador                            Citado   Titular   Min.   Goles   Amar.   Roja");
+        doc.font("Helvetica");
+        for (const a of sorted) {
+          ensureSpace(doc, 14);
+          const name = `${a.player.firstName} ${a.player.lastName}`;
+          doc.fontSize(8).fillColor(COLORS.carbon);
+          fullWidthText(
+            doc,
+            `${name.padEnd(30).slice(0, 30)}   ${a.started ? "Sí" : "No"}       ${a.startingEleven ? "Sí" : "No"}       ${a.minutesPlayed ?? "-"}      ${a.goals}       ${a.yellowCards}       ${a.redCard ? "Sí" : "No"}`,
+          );
+        }
+      }
+    }
+  }
+
+  /** Balance por mes + totales generales, reutilizando FinanceService.getSummary() (ya calcula el desglose mensual). */
+  async buildFinanceReportPdf(): Promise<Buffer> {
+    const summary = await this.financeService.getSummary();
+
+    return renderPdfToBuffer((doc) => {
+      addHeader(doc, "Reporte Financiero", "Balance por mes y totales generales");
+
+      sectionTitle(doc, "Totales generales");
+      const statY = doc.y;
+      const cardW = (PAGE_CONTENT_WIDTH - 16) / 3;
+      drawStatCard(doc, PAGE_MARGIN, statY, cardW, 50, formatCLP(summary.totalIncome), "Ingresos totales");
+      drawStatCard(doc, PAGE_MARGIN + cardW + 8, statY, cardW, 50, formatCLP(summary.totalExpense), "Gastos totales");
+      drawStatCard(doc, PAGE_MARGIN + (cardW + 8) * 2, statY, cardW, 50, formatCLP(summary.balance), "Balance");
+      doc.y = statY + 60;
+
+      sectionTitle(doc, "Balance por mes");
+      if (summary.byMonth.length === 0) {
+        doc.fontSize(9).fillColor(COLORS.gris);
+        fullWidthText(doc, "Sin movimientos registrados.");
+      } else {
+        doc.fontSize(8).fillColor(COLORS.rojoOscuro).font("Helvetica-Bold");
+        fullWidthText(doc, "Mes                     Ingresos          Gastos            Balance");
+        doc.font("Helvetica");
+        for (const m of summary.byMonth) {
+          ensureSpace(doc, 14);
+          const label = new Date(`${m.month}-01`).toLocaleDateString("es-CL", { month: "long", year: "numeric", timeZone: "UTC" });
+          doc.fontSize(8).fillColor(COLORS.carbon);
+          fullWidthText(
+            doc,
+            `${label.padEnd(23).slice(0, 23)}  ${formatCLP(m.income).padEnd(16)}  ${formatCLP(m.expense).padEnd(16)}  ${formatCLP(m.balance)}`,
+          );
         }
       }
 

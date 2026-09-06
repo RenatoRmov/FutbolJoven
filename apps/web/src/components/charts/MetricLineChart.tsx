@@ -1,6 +1,7 @@
 "use client";
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { formatDate } from "@/lib/date";
 
 export interface MetricPoint {
   date: string;
@@ -18,12 +19,12 @@ export function MetricLineChart({ data, unit, color = "#C8102E" }: { data: Metri
           tick={{ fill: "#6E6660", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v: string) => new Date(v).toLocaleDateString("es-AR", { day: "2-digit", month: "short" })}
+          tickFormatter={(v: string) => formatDate(v, "es-AR", { day: "2-digit", month: "short" })}
         />
         <YAxis domain={["auto", "auto"]} tick={{ fill: "#6E6660", fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
         <Tooltip
           contentStyle={{ background: "#fff", border: "1px solid #E6DEDA", borderRadius: 8, fontSize: 12 }}
-          labelFormatter={(v: string) => new Date(v).toLocaleDateString("es-AR")}
+          labelFormatter={(v: string) => formatDate(v, "es-AR")}
           formatter={(value: number) => [`${value}${unit ?? ""}`, ""]}
         />
         <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={{ r: 4, fill: color, stroke: "#fff", strokeWidth: 2 }} connectNulls />

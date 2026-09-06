@@ -184,7 +184,7 @@ export type CreateNutritionRecordDto = z.infer<typeof createNutritionRecordSchem
 // Physical batteries & injuries
 // ---------------------------------------------------------------------------
 
-export const physicalRecordTypeEnum = z.enum(["ANTHROPOMETRIC", "PERFORMANCE"]);
+export const physicalRecordTypeEnum = z.enum(["ANTHROPOMETRIC", "PERFORMANCE", "WEIGHT_CHECK"]);
 
 export const createPhysicalRecordSchema = z.object({
   playerId: z.string().uuid(),
@@ -299,3 +299,18 @@ export const createFinancialEntrySchema = z.object({
   description: z.string().max(500).optional().nullable(),
 });
 export type CreateFinancialEntryDto = z.infer<typeof createFinancialEntrySchema>;
+
+export const inventoryConditionEnum = z.enum(["Bueno", "Regular", "Malo"]);
+
+export const createInventoryItemSchema = z.object({
+  name: z.string().min(1).max(120),
+  itemType: z.string().max(80).optional().nullable(),
+  quantity: z.coerce.number().int().min(0).max(999_999),
+  condition: inventoryConditionEnum.optional().nullable(),
+  categoryId: z.string().uuid().optional().nullable(),
+  observations: z.string().max(500).optional().nullable(),
+});
+export type CreateInventoryItemDto = z.infer<typeof createInventoryItemSchema>;
+
+export const updateInventoryItemSchema = createInventoryItemSchema.partial();
+export type UpdateInventoryItemDto = z.infer<typeof updateInventoryItemSchema>;

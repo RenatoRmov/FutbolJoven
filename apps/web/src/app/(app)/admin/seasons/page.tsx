@@ -9,6 +9,7 @@ import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table";
 import { Badge } from "@/components/ui/Badge";
 import { api, ApiError } from "@/lib/api-client";
 import { Season } from "@/lib/types";
+import { formatDate } from "@/lib/date";
 
 export default function SeasonsAdminPage() {
   const [seasons, setSeasons] = useState<Season[]>([]);
@@ -90,8 +91,8 @@ export default function SeasonsAdminPage() {
             {seasons.map((s) => (
               <Tr key={s.id}>
                 <Td className="font-medium text-carbon">{s.name}</Td>
-                <Td>{new Date(s.startDate).toLocaleDateString("es-AR")}</Td>
-                <Td>{new Date(s.endDate).toLocaleDateString("es-AR")}</Td>
+                <Td>{formatDate(s.startDate, "es-AR")}</Td>
+                <Td>{formatDate(s.endDate, "es-AR")}</Td>
                 <Td>{s.isActive ? <Badge tone="success">Activa</Badge> : <Badge tone="neutral">Inactiva</Badge>}</Td>
                 <Td>
                   {!s.isActive && (

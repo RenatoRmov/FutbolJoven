@@ -131,7 +131,7 @@ export class EvaluationsService {
     const evaluations = await this.prisma.evaluation.findMany({
       where: { playerId },
       include: evaluationInclude,
-      orderBy: { date: "desc" },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     });
     return evaluations.map(withNotaFinal);
   }
@@ -141,7 +141,7 @@ export class EvaluationsService {
     const evaluations = await this.prisma.evaluation.findMany({
       where: { teamId, ...(date ? { date: new Date(date) } : {}) },
       include: evaluationInclude,
-      orderBy: { date: "desc" },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     });
     return evaluations.map(withNotaFinal);
   }

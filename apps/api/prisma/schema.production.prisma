@@ -63,7 +63,8 @@ model Category {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  teams Team[]
+  teams          Team[]
+  inventoryItems InventoryItem[]
 
   @@unique([name])
 }
@@ -511,7 +512,9 @@ model PhysicalRecord {
   recordedBy   User     @relation("PhysicalRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
   date         DateTime
   // ANTHROPOMETRIC (Área Médica: peso/talla/IMC/pliegues...) | PERFORMANCE
-  // (Rendimiento Físico: SJ/CMJ/IE/sprints/VIFT...) — same flexible model,
+  // (Rendimiento Físico: SJ/CMJ/IE/sprints/VIFT...) | WEIGHT_CHECK (Revisión
+  // de Peso: peso/talla/edad/IMC solamente, cargado con más frecuencia y por
+  // otro personal que la Evaluación Antropométrica) — same flexible model,
   // discriminated so each tab's history only shows its own records.
   recordType   String   @default("ANTHROPOMETRIC")
   metrics      String // JSON-encoded metric map, shape depends on recordType
@@ -624,6 +627,24 @@ model FinancialEntry {
   createdAt DateTime @default(now())
 
   @@index([clubId, date])
+}
+
+model InventoryItem {
+  id String @id @default(uuid())
+
+  name         String
+  itemType     String? // agrupación libre: "Balones", "Indumentaria", "Médico", etc.
+  quantity     Int     @default(0)
+  condition    String? // "Bueno" | "Regular" | "Malo"
+  observations String?
+
+  categoryId String? // null = general del club; si no, específico de esa categoría
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId])
 }
 
 model Notification {

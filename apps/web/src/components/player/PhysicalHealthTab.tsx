@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState, Skeleton } from "@/components/ui/Skeleton";
 import { api } from "@/lib/api-client";
+import { formatDate } from "@/lib/date";
 
 interface PhysicalRecord {
   id: string;
@@ -63,7 +64,7 @@ export function PhysicalHealthTab({ playerId }: { playerId: string }) {
                   <Badge tone={INJURY_STATUS_TONE[inj.status] ?? "neutral"}>{INJURY_STATUS_LABELS[inj.status] ?? inj.status}</Badge>
                 </div>
                 <p className="text-xs text-gris">
-                  {new Date(inj.date).toLocaleDateString("es-AR")}
+                  {formatDate(inj.date, "es-AR")}
                   {inj.expectedRecoveryDays !== null && ` · Recuperación estimada: ${inj.expectedRecoveryDays} días`}
                   {inj.painLevel !== null && ` · Dolor: ${inj.painLevel}/10`}
                 </p>
@@ -84,7 +85,7 @@ export function PhysicalHealthTab({ playerId }: { playerId: string }) {
             records.map((r) => (
               <div key={r.id} className="py-4">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-medium text-carbon">{new Date(r.date).toLocaleDateString("es-AR")}</span>
+                  <span className="text-sm font-medium text-carbon">{formatDate(r.date, "es-AR")}</span>
                   <span className="text-xs text-gris">
                     {r.recordedBy.firstName} {r.recordedBy.lastName}
                   </span>

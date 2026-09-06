@@ -1,6 +1,7 @@
 "use client";
 
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { formatDate } from "@/lib/date";
 
 const COLORS = ["#C8102E", "#F0B429", "#1D5FB3", "#1E7A3E", "#8C0E22", "#B4531A"];
 
@@ -31,12 +32,12 @@ export function EvolutionLineChart({ series }: { series: EvolutionSeries[] }) {
         <XAxis
           dataKey="date"
           tick={{ fill: "#6E6660", fontSize: 11 }}
-          tickFormatter={(v: string) => new Date(v).toLocaleDateString("es-AR", { day: "2-digit", month: "short" })}
+          tickFormatter={(v: string) => formatDate(v, "es-AR", { day: "2-digit", month: "short" })}
         />
         <YAxis domain={[0, 10]} tick={{ fill: "#6E6660", fontSize: 11 }} />
         <Tooltip
           contentStyle={{ background: "#fff", border: "1px solid #E6DEDA", borderRadius: 8, fontSize: 12 }}
-          labelFormatter={(v: string) => new Date(v).toLocaleDateString("es-AR")}
+          labelFormatter={(v: string) => formatDate(v, "es-AR")}
         />
         <Legend wrapperStyle={{ fontSize: 12, color: "#6E6660" }} />
         {series.map((s, i) => (

@@ -28,6 +28,7 @@ const topNav: NavItem[] = [
 const bottomNav: NavItem[] = [
   { href: "/fixtures", label: "Fixture", perms: [PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED] },
   { href: "/finance", label: "Financiero", perms: [PERMISSIONS.FINANCE_VIEW, PERMISSIONS.FINANCE_MANAGE] },
+  { href: "/inventory", label: "Inventario", perms: [PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.INVENTORY_MANAGE] },
   { href: "/audit", label: "Auditoría", perms: [PERMISSIONS.AUDIT_VIEW] },
   { href: "/player-profile", label: "Ficha del Jugador", perms: [PERMISSIONS.PLAYERS_CREATE] },
   { href: "/admin/users", label: "Usuarios", perms: [PERMISSIONS.USERS_MANAGE] },

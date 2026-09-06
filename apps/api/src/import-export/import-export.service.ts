@@ -2,8 +2,10 @@ import { BadRequestException, Injectable } from "@nestjs/common";
 import * as ExcelJS from "exceljs";
 import { importPlayerRowSchema, PLAYER_IMPORT_COLUMNS } from "@futboljoven/shared";
 import type { ImportConfirmResponse, ImportPreviewResponse, ImportRowResult } from "@futboljoven/shared";
+import { EVALUATION_TYPES, TALENT_STATUS_LABELS } from "@futboljoven/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { PlayersService } from "../players/players.service";
+import { EvaluationsService } from "../evaluations/evaluations.service";
 import type { AuthenticatedUser } from "../auth/auth.types";
 import type { PlayerFilters } from "../players/players.service";
 
@@ -62,6 +64,7 @@ export class ImportExportService {
   constructor(
     private prisma: PrismaService,
     private playersService: PlayersService,
+    private evaluationsService: EvaluationsService,
   ) {}
 
   async buildTemplate(): Promise<Buffer> {
@@ -263,6 +266,158 @@ export class ImportExportService {
         status: p.status,
       });
     }
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  async exportPlayersFull(user: AuthenticatedUser, filters: PlayerFilters): Promise<Buffer> {
+    const players = await this.playersService.findAll(user, filters);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Jugadores");
+    sheet.columns = [
+      { header: "RUT / Documento", key: "documentId", width: 18 },
+      { header: "Nombres", key: "firstName", width: 20 },
+      { header: "Apellidos", key: "lastName", width: 24 },
+      { header: "Nombre deportivo", key: "sportName", width: 20 },
+      { header: "Fecha de nacimiento", key: "birthDate", width: 16 },
+      { header: "Género", key: "gender", width: 10 },
+      { header: "Nacionalidad", key: "nationality", width: 16 },
+      { header: "País", key: "country", width: 14 },
+      { header: "Ciudad", key: "city", width: 16 },
+      { header: "Categoría", key: "category", width: 18 },
+      { header: "Fecha de ingreso", key: "joinDate", width: 16 },
+      { header: "Fecha de salida", key: "exitDate", width: 16 },
+      { header: "Motivo de salida", key: "exitReason", width: 20 },
+      { header: "Posición principal", key: "position", width: 20 },
+      { header: "Posiciones secundarias", key: "secondaryPositions", width: 26 },
+      { header: "Pie hábil", key: "dominantFoot", width: 12 },
+      { header: "Altura (cm)", key: "height", width: 12 },
+      { header: "Peso (kg)", key: "weight", width: 12 },
+      { header: "Dorsal", key: "jerseyNumber", width: 8 },
+      { header: "Estado", key: "status", width: 14 },
+      { header: "Observaciones", key: "notes", width: 30 },
+      { header: "Teléfono", key: "phone", width: 16 },
+      { header: "Email", key: "email", width: 24 },
+      { header: "Dirección", key: "address", width: 26 },
+      { header: "Sistema de salud", key: "healthSystem", width: 16 },
+      { header: "Isapre", key: "isapreName", width: 16 },
+      { header: "Tramo Fonasa", key: "fonasaTramo", width: 14 },
+      { header: "Alergias", key: "allergies", width: 24 },
+      { header: "Enfermedades crónicas", key: "chronicDiseases", width: 24 },
+      { header: "Medicamentos permanentes", key: "permanentMedications", width: 24 },
+      { header: "Lesiones previas relevantes", key: "relevantPreviousInjuries", width: 26 },
+      { header: "Grupo sanguíneo", key: "bloodType", width: 14 },
+      { header: "Observaciones médicas", key: "medicalObservations", width: 30 },
+      { header: "Contacto de emergencia", key: "emergencyContactName", width: 22 },
+      { header: "Relación", key: "emergencyContactRelationship", width: 16 },
+      { header: "Teléfono emergencia", key: "emergencyContactPhone", width: 18 },
+      { header: "Teléfono emergencia (alt.)", key: "emergencyContactPhoneAlt", width: 18 },
+      { header: "Dirección de emergencia", key: "emergencyContactAddress", width: 26 },
+    ];
+    sheet.getRow(1).font = { bold: true };
+    for (const p of players as any[]) {
+      sheet.addRow({
+        documentId: p.documentId ?? "",
+        firstName: p.firstName,
+        lastName: p.lastName,
+        sportName: p.sportName ?? "",
+        birthDate: p.birthDate ? new Date(p.birthDate).toISOString().slice(0, 10) : "",
+        gender: p.gender ?? "",
+        nationality: p.nationality ?? "",
+        country: p.country ?? "",
+        city: p.city ?? "",
+        category: p.currentTeam?.category?.name ?? "",
+        joinDate: p.joinDate ? new Date(p.joinDate).toISOString().slice(0, 10) : "",
+        exitDate: p.exitDate ? new Date(p.exitDate).toISOString().slice(0, 10) : "",
+        exitReason: p.exitReason ?? "",
+        position: p.primaryPosition ?? "",
+        secondaryPositions: (p.secondaryPositions ?? []).map((sp: any) => sp.position).join(", "),
+        dominantFoot: p.dominantFoot ?? "",
+        height: p.height ?? "",
+        weight: p.weight ?? "",
+        jerseyNumber: p.jerseyNumber ?? "",
+        status: p.status,
+        notes: p.notes ?? "",
+        phone: p.phone ?? "",
+        email: p.email ?? "",
+        address: p.address ?? "",
+        healthSystem: p.healthSystem ?? "",
+        isapreName: p.isapreName ?? "",
+        fonasaTramo: p.fonasaTramo ?? "",
+        allergies: p.allergies ?? "",
+        chronicDiseases: p.chronicDiseases ?? "",
+        permanentMedications: p.permanentMedications ?? "",
+        relevantPreviousInjuries: p.relevantPreviousInjuries ?? "",
+        bloodType: p.bloodType ?? "",
+        medicalObservations: p.medicalObservations ?? "",
+        emergencyContactName: p.emergencyContactName ?? "",
+        emergencyContactRelationship: p.emergencyContactRelationship ?? "",
+        emergencyContactPhone: p.emergencyContactPhone ?? "",
+        emergencyContactPhoneAlt: p.emergencyContactPhoneAlt ?? "",
+        emergencyContactAddress: p.emergencyContactAddress ?? "",
+      });
+    }
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  async exportEvaluations(user: AuthenticatedUser, filters: { teamId?: string; playerId?: string }): Promise<Buffer> {
+    if (!filters.teamId && !filters.playerId) {
+      throw new BadRequestException("Se requiere teamId o playerId");
+    }
+
+    const evaluations = filters.playerId
+      ? await this.evaluationsService.findForPlayer(user, filters.playerId)
+      : await this.evaluationsService.findForTeam(user, filters.teamId as string);
+
+    const playerIds = Array.from(new Set((evaluations as any[]).map((e) => e.playerId)));
+    const players = await this.prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, firstName: true, lastName: true } });
+    const playerNameById = new Map(players.map((p) => [p.id, `${p.firstName} ${p.lastName}`]));
+
+    const dimensionByKey = new Map<string, { name: string; order: number }>();
+    for (const ev of evaluations as any[]) {
+      for (const s of ev.scores) {
+        dimensionByKey.set(s.dimension.key, { name: s.dimension.name, order: s.dimension.order ?? 0 });
+      }
+    }
+    const dimensionKeys = Array.from(dimensionByKey.entries())
+      .sort((a, b) => a[1].order - b[1].order)
+      .map(([key]) => key);
+
+    const typeLabelByValue = new Map(EVALUATION_TYPES.map((t) => [t.value, t.label]));
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Evaluaciones");
+    sheet.columns = [
+      { header: "Fecha", key: "date", width: 14 },
+      { header: "Jugador", key: "player", width: 24 },
+      { header: "Tipo", key: "type", width: 14 },
+      { header: "Contexto", key: "context", width: 24 },
+      ...dimensionKeys.map((key) => ({ header: dimensionByKey.get(key)!.name, key, width: 14 })),
+      { header: "Nota Final", key: "notaFinal", width: 12 },
+      { header: "Estatus", key: "estatus", width: 16 },
+      { header: "Evaluador", key: "evaluator", width: 22 },
+      { header: "Observación", key: "observation", width: 30 },
+    ];
+    sheet.getRow(1).font = { bold: true };
+
+    for (const ev of evaluations as any[]) {
+      const scoreByKey = new Map(ev.scores.map((s: any) => [s.dimension.key, s.value]));
+      const row: Record<string, unknown> = {
+        date: new Date(ev.date).toISOString().slice(0, 10),
+        player: playerNameById.get(ev.playerId) ?? "",
+        type: typeLabelByValue.get(ev.type) ?? ev.type,
+        context: ev.context ?? "",
+        notaFinal: ev.notaFinal ?? "",
+        estatus: ev.estatus ? (TALENT_STATUS_LABELS[ev.estatus as keyof typeof TALENT_STATUS_LABELS] ?? ev.estatus) : "",
+        evaluator: `${ev.evaluator.firstName} ${ev.evaluator.lastName}`,
+        observation: ev.observation ?? "",
+      };
+      for (const key of dimensionKeys) row[key] = scoreByKey.get(key) ?? "";
+      sheet.addRow(row);
+    }
+
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
   }

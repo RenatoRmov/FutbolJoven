@@ -13,6 +13,7 @@ import { Skeleton, EmptyState } from "@/components/ui/Skeleton";
 import { CategoryBarChart } from "@/components/charts/CategoryBarChart";
 import { api, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
+import { formatDate } from "@/lib/date";
 
 interface FinancialEntry {
   id: string;
@@ -43,6 +44,7 @@ export default function FinancePage() {
   const [entries, setEntries] = useState<FinancialEntry[] | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,13 +55,28 @@ export default function FinancePage() {
 
   useEffect(load, []);
 
+  function startEdit(entry: FinancialEntry) {
+    setEditingId(entry.id);
+    setForm({ date: entry.date.slice(0, 10), type: entry.type, category: entry.category, amount: String(entry.amount), description: entry.description ?? "" });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm(emptyForm);
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSaving(true);
     try {
-      await api.post("/finance", { ...form, amount: Number(form.amount) });
-      setForm(emptyForm);
+      const payload = { ...form, amount: Number(form.amount) };
+      if (editingId) {
+        await api.patch(`/finance/${editingId}`, payload);
+      } else {
+        await api.post("/finance", payload);
+      }
+      cancelEdit();
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo guardar el movimiento");
@@ -68,12 +85,24 @@ export default function FinancePage() {
     }
   }
 
+  async function handleDelete(id: string) {
+    if (!confirm("¿Eliminar este movimiento?")) return;
+    await api.delete(`/finance/${id}`);
+    load();
+  }
+
   const balanceChartData = (summary?.byMonth ?? []).map((m) => ({ categoryName: m.month, avgNotaFinal: m.balance, playerCount: 0 }));
 
   return (
     <div>
       <Header title="Financiero" />
       <div className="space-y-6 p-6">
+        <div className="flex justify-end">
+          <Button variant="secondary" size="sm" onClick={() => api.download("/reports/finance/pdf", "reporte-financiero.pdf")}>
+            Exportar PDF
+          </Button>
+        </div>
+
         <div className="grid grid-cols-3 gap-4">
           <KpiCard label="Ingresos totales" value={summary ? formatCLP(summary.totalIncome) : "—"} tone="success" />
           <KpiCard label="Gastos totales" value={summary ? formatCLP(summary.totalExpense) : "—"} tone="danger" />
@@ -94,7 +123,7 @@ export default function FinancePage() {
         {canManage && (
           <Card>
             <CardHeader>
-              <CardTitle>Nuevo movimiento</CardTitle>
+              <CardTitle>{editingId ? "Editar movimiento" : "Nuevo movimiento"}</CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-5">
@@ -129,10 +158,15 @@ export default function FinancePage() {
                   <Label>Descripción</Label>
                   <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
                 </div>
-                <div className="md:col-span-5">
+                <div className="flex gap-2 md:col-span-5">
                   <Button type="submit" disabled={saving}>
-                    {saving ? "Guardando..." : "Registrar movimiento"}
+                    {saving ? "Guardando..." : editingId ? "Guardar cambios" : "Registrar movimiento"}
                   </Button>
+                  {editingId && (
+                    <Button type="button" variant="secondary" onClick={cancelEdit}>
+                      Cancelar
+                    </Button>
+                  )}
                 </div>
               </form>
               {error && <p className="mt-2 text-sm text-rojo-oscuro">{error}</p>}
@@ -160,12 +194,13 @@ export default function FinancePage() {
                 <Th>Monto</Th>
                 <Th>Descripción</Th>
                 <Th>Registrado por</Th>
+                {canManage && <Th>Acciones</Th>}
               </Tr>
             </Thead>
             <Tbody>
               {entries.map((e) => (
                 <Tr key={e.id}>
-                  <Td>{new Date(e.date).toLocaleDateString("es-CL")}</Td>
+                  <Td>{formatDate(e.date)}</Td>
                   <Td>
                     <Badge tone={e.type === "INCOME" ? "success" : "danger"}>{FINANCIAL_ENTRY_TYPE_LABELS[e.type]}</Badge>
                   </Td>
@@ -175,6 +210,18 @@ export default function FinancePage() {
                   <Td className="text-gris">
                     {e.recordedBy.firstName} {e.recordedBy.lastName}
                   </Td>
+                  {canManage && (
+                    <Td>
+                      <div className="flex gap-2">
+                        <Button variant="secondary" size="sm" onClick={() => startEdit(e)}>
+                          Editar
+                        </Button>
+                        <Button variant="secondary" size="sm" onClick={() => handleDelete(e.id)}>
+                          Eliminar
+                        </Button>
+                      </div>
+                    </Td>
+                  )}
                 </Tr>
               ))}
             </Tbody>

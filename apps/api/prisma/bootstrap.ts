@@ -73,6 +73,8 @@ const PERMISSION_DESCRIPTIONS: Record<string, string> = {
   [PERMISSIONS.FIXTURES_MANAGE_ASSIGNED]: "Cargar partidos y resultados de los equipos asignados",
   [PERMISSIONS.FINANCE_VIEW]: "Ver el estado financiero del club",
   [PERMISSIONS.FINANCE_MANAGE]: "Registrar ingresos y gastos del club",
+  [PERMISSIONS.INVENTORY_VIEW]: "Ver el inventario del club",
+  [PERMISSIONS.INVENTORY_MANAGE]: "Registrar y editar el inventario del club",
 };
 
 const CATEGORY_DEFS = [

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
 import { createFinancialEntrySchema, PERMISSIONS } from "@futboljoven/shared";
 import { RequirePermission } from "../auth/decorators/require-permission.decorator";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
@@ -26,6 +26,12 @@ export class FinanceController {
   @Post()
   create(@CurrentUser() user: AuthenticatedUser, @Body(new ZodValidationPipe(createFinancialEntrySchema)) body: any) {
     return this.financeService.create(user, body);
+  }
+
+  @RequirePermission(PERMISSIONS.FINANCE_MANAGE)
+  @Patch(":id")
+  update(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body(new ZodValidationPipe(createFinancialEntrySchema.partial())) body: any) {
+    return this.financeService.update(user, id, body);
   }
 
   @RequirePermission(PERMISSIONS.FINANCE_MANAGE)

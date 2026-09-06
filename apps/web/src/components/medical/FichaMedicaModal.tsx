@@ -12,6 +12,7 @@ import { Skeleton, EmptyState } from "@/components/ui/Skeleton";
 import { RecoveryBarChart } from "@/components/charts/RecoveryBarChart";
 import { api, ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { formatDate } from "@/lib/date";
 
 interface PhysicalRecord {
   id: string;
@@ -78,6 +79,7 @@ function recoveryDays(injury: Injury): number | null {
 }
 
 const emptyMeasurementForm = { date: new Date().toISOString().slice(0, 10), weight: "", height: "", age: "", bodyFat: "", muscleMass: "", s6p: "", imo: "" };
+const emptyWeightCheckForm = { date: new Date().toISOString().slice(0, 10), weight: "", height: "", age: "" };
 const emptyDiagnosisForm = {
   date: new Date().toISOString().slice(0, 10),
   injuryType: "",
@@ -113,16 +115,22 @@ export function FichaMedicaModal({
   const [glossaryOpen, setGlossaryOpen] = useState(false);
   const [hasInjury, setHasInjury] = useState(false);
   const [diagnosisForm, setDiagnosisForm] = useState(emptyDiagnosisForm);
+  const [weightCheckRecords, setWeightCheckRecords] = useState<PhysicalRecord[] | null>(null);
+  const [weightCheckForm, setWeightCheckForm] = useState(emptyWeightCheckForm);
+  const [wcSaving, setWcSaving] = useState(false);
+  const [wcError, setWcError] = useState<string | null>(null);
 
   function load() {
     api.get<PhysicalRecord[]>(`/physical/player/${playerId}?recordType=ANTHROPOMETRIC`).then(setRecords);
     api.get<Injury[]>(`/injuries/player/${playerId}`).then(setInjuries);
+    api.get<PhysicalRecord[]>(`/physical/player/${playerId}?recordType=WEIGHT_CHECK`).then(setWeightCheckRecords);
   }
 
   useEffect(load, [playerId]);
 
   useEffect(() => {
     setMeasurementForm((f) => ({ ...f, age: String(computeAge(birthDate, f.date)) }));
+    setWeightCheckForm((f) => ({ ...f, age: String(computeAge(birthDate, f.date)) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [birthDate]);
 
@@ -134,8 +142,34 @@ export function FichaMedicaModal({
   const imc = computeImc(weightNum, heightNum);
   const clasificacion = classifyImc(imc);
 
+  const wcImc = computeImc(Number(weightCheckForm.weight) || 0, Number(weightCheckForm.height) || 0);
+  const wcClasificacion = classifyImc(wcImc);
+
   function handleDateChange(date: string) {
     setMeasurementForm((f) => ({ ...f, date, age: String(computeAge(birthDate, date)) }));
+  }
+
+  function handleWeightCheckDateChange(date: string) {
+    setWeightCheckForm((f) => ({ ...f, date, age: String(computeAge(birthDate, date)) }));
+  }
+
+  async function handleSaveWeightCheck(e: FormEvent) {
+    e.preventDefault();
+    setWcError(null);
+    setWcSaving(true);
+    try {
+      const metrics: Record<string, number> = {};
+      if (weightCheckForm.weight) metrics.weight = Number(weightCheckForm.weight);
+      if (weightCheckForm.height) metrics.height = Number(weightCheckForm.height);
+      if (weightCheckForm.age) metrics.age = Number(weightCheckForm.age);
+      await api.post("/physical", { playerId, date: weightCheckForm.date, recordType: "WEIGHT_CHECK", metrics });
+      setWeightCheckForm({ ...emptyWeightCheckForm, date: weightCheckForm.date, age: weightCheckForm.age });
+      load();
+    } catch (err) {
+      setWcError(err instanceof ApiError ? err.message : "No se pudo guardar la revisión de peso");
+    } finally {
+      setWcSaving(false);
+    }
   }
 
   async function handleSaveMeasurement(e: FormEvent) {
@@ -231,6 +265,7 @@ export function FichaMedicaModal({
         <TabsList>
           <TabsTrigger value="area-medica">Área Médica</TabsTrigger>
           <TabsTrigger value="registro-medico">Registro Médico</TabsTrigger>
+          <TabsTrigger value="revision-peso">Revisión de Peso</TabsTrigger>
         </TabsList>
 
         <TabsContent value="area-medica" className="pt-4">
@@ -302,7 +337,7 @@ export function FichaMedicaModal({
                 return (
                   <div key={r.id} className="py-2 text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-carbon">{new Date(r.date).toLocaleDateString("es-CL")}</span>
+                      <span className="text-carbon">{formatDate(r.date)}</span>
                       <span className="text-gris">
                         {w ? `${w} kg` : ""} {h ? `· ${h} cm` : ""} {rImc !== null ? `· IMC ${rImc.toFixed(1)}` : ""}
                       </span>
@@ -433,7 +468,7 @@ export function FichaMedicaModal({
                     </Badge>
                   </div>
                   <p className="text-xs text-gris">
-                    {new Date(inj.date).toLocaleDateString("es-CL")}
+                    {formatDate(inj.date)}
                     {inj.treatment && ` · ${inj.treatment}`}
                     {inj.responsibleProfessional && ` · ${inj.responsibleProfessional}`}
                   </p>
@@ -450,7 +485,7 @@ export function FichaMedicaModal({
               <CardContent>
                 <RecoveryBarChart
                   data={injuriesWithRecovery.map(({ injury, days }) => ({
-                    label: `${new Date(injury.date).toLocaleDateString("es-CL", { day: "2-digit", month: "short" })} ${injury.injuryType ?? injury.description}`,
+                    label: `${formatDate(injury.date, "es-CL", { day: "2-digit", month: "short" })} ${injury.injuryType ?? injury.description}`,
                     days,
                   }))}
                 />
@@ -464,6 +499,88 @@ export function FichaMedicaModal({
                 </div>
               </CardContent>
             </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="revision-peso" className="pt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gris">
+            Nueva revisión de peso
+          </p>
+          <p className="mb-3 text-[11px] text-gris">
+            Registro simple y frecuente (peso, talla, edad e IMC), separado de la Evaluación Antropométrica de Área Médica.
+          </p>
+
+          <form onSubmit={handleSaveWeightCheck} className="space-y-3">
+            <div>
+              <Label>Fecha</Label>
+              <Input type="date" value={weightCheckForm.date} onChange={(e) => handleWeightCheckDateChange(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Peso (kg)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  placeholder="Ej: 60.0"
+                  value={weightCheckForm.weight}
+                  onChange={(e) => setWeightCheckForm({ ...weightCheckForm, weight: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Talla (cm)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  placeholder="Ej: 171.0"
+                  value={weightCheckForm.height}
+                  onChange={(e) => setWeightCheckForm({ ...weightCheckForm, height: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Edad</Label>
+                <Input type="number" step="0.1" value={weightCheckForm.age} onChange={(e) => setWeightCheckForm({ ...weightCheckForm, age: e.target.value })} />
+              </div>
+              <div>
+                <Label>IMC</Label>
+                <Input disabled value={wcImc !== null ? wcImc.toFixed(1) : ""} />
+              </div>
+              <div className="col-span-2">
+                <Label>Clasificación</Label>
+                <Input disabled value={wcClasificacion} />
+              </div>
+            </div>
+            {wcError && <p className="text-sm text-rojo-oscuro">{wcError}</p>}
+            <Button type="submit" className="w-full" disabled={wcSaving}>
+              {wcSaving ? "Guardando..." : "Guardar revisión de peso"}
+            </Button>
+          </form>
+
+          <p className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wide text-gris">Historial de revisiones</p>
+          {!weightCheckRecords ? (
+            <Skeleton className="h-16" />
+          ) : weightCheckRecords.length === 0 ? (
+            <p className="py-2 text-sm text-gris">Aún no hay revisiones de peso registradas.</p>
+          ) : (
+            <div className="divide-y divide-borde">
+              {weightCheckRecords.map((r) => {
+                const w = typeof r.metrics.weight === "number" ? r.metrics.weight : Number(r.metrics.weight) || 0;
+                const h = typeof r.metrics.height === "number" ? r.metrics.height : Number(r.metrics.height) || 0;
+                const rImc = computeImc(w, h);
+                return (
+                  <div key={r.id} className="py-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-carbon">{formatDate(r.date)}</span>
+                      <span className="text-gris">
+                        {w ? `${w} kg` : ""} {h ? `· ${h} cm` : ""} {rImc !== null ? `· IMC ${rImc.toFixed(1)}` : ""}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gris">
+                      Registró: {r.recordedBy.firstName} {r.recordedBy.lastName}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </TabsContent>
       </Tabs>

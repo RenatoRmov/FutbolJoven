@@ -1,6 +1,7 @@
 "use client";
 
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { formatDate } from "@/lib/date";
 
 export interface TrendPoint {
   week: string;
@@ -18,12 +19,12 @@ export function TrendLineChart({ data }: { data: TrendPoint[] }) {
           tick={{ fill: "#6E6660", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v: string) => new Date(v).toLocaleDateString("es-AR", { day: "2-digit", month: "short" })}
+          tickFormatter={(v: string) => formatDate(v, "es-AR", { day: "2-digit", month: "short" })}
         />
         <YAxis domain={[0, 10]} tick={{ fill: "#6E6660", fontSize: 11 }} axisLine={false} tickLine={false} />
         <Tooltip
           contentStyle={{ background: "#fff", border: "1px solid #E6DEDA", borderRadius: 8, fontSize: 12 }}
-          labelFormatter={(v: string) => `Semana del ${new Date(v).toLocaleDateString("es-AR")}`}
+          labelFormatter={(v: string) => `Semana del ${formatDate(v, "es-AR")}`}
           formatter={(value: number) => [value, "Nota Final promedio"]}
         />
         <Area

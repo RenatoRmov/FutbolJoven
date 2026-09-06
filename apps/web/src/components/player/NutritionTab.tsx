@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState, Skeleton } from "@/components/ui/Skeleton";
 import { MetricLineChart } from "@/components/charts/MetricLineChart";
 import { api } from "@/lib/api-client";
+import { formatDate } from "@/lib/date";
 
 interface NutritionRecord {
   id: string;
@@ -79,7 +80,7 @@ export function NutritionTab({ playerId }: { playerId: string }) {
                 return (
                   <div key={r.id} className="py-4">
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="text-sm font-medium text-carbon">{new Date(r.date).toLocaleDateString("es-AR")}</span>
+                      <span className="text-sm font-medium text-carbon">{formatDate(r.date, "es-AR")}</span>
                       <span className="text-xs text-gris">
                         {r.recordedBy.firstName} {r.recordedBy.lastName}
                       </span>

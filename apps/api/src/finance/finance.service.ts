@@ -30,6 +30,19 @@ export class FinanceService {
     return entry;
   }
 
+  async update(user: AuthenticatedUser, id: string, dto: Partial<CreateFinancialEntryDto>) {
+    const before = await this.prisma.financialEntry.findUnique({ where: { id } });
+    if (!before) throw new NotFoundException("Movimiento no encontrado");
+
+    const entry = await this.prisma.financialEntry.update({
+      where: { id },
+      data: dto,
+      include: { recordedBy: { select: { firstName: true, lastName: true } } },
+    });
+    await this.audit.record({ userId: user.id, action: "UPDATE", entityType: "FinancialEntry", entityId: id, oldValue: before, newValue: entry });
+    return entry;
+  }
+
   async remove(user: AuthenticatedUser, id: string) {
     const before = await this.prisma.financialEntry.findUnique({ where: { id } });
     if (!before) throw new NotFoundException("Movimiento no encontrado");

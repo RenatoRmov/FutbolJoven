@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { EmptyState, Skeleton } from "@/components/ui/Skeleton";
 import { MinutesBarChart } from "@/components/charts/MinutesBarChart";
 import { api } from "@/lib/api-client";
+import { formatDate } from "@/lib/date";
 
 interface Appearance {
   id: string;
@@ -34,7 +35,7 @@ export function MatchAppearancesTab({ playerId }: { playerId: string }) {
   const minutesChartData = useMemo(
     () =>
       (appearances ?? []).slice(0, 8).map((a) => ({
-        label: `${new Date(a.match.date).toLocaleDateString("es-CL", { day: "2-digit", month: "short" })} · ${a.match.opponent}`,
+        label: `${formatDate(a.match.date, "es-CL", { day: "2-digit", month: "short" })} · ${a.match.opponent}`,
         minutes: a.minutesPlayed ?? 0,
       })),
     [appearances],
@@ -79,7 +80,7 @@ export function MatchAppearancesTab({ playerId }: { playerId: string }) {
                     {a.match.isHome ? "vs" : "@"} {a.match.opponent}
                   </p>
                   <p className="text-xs text-gris">
-                    {new Date(a.match.date).toLocaleDateString("es-AR")}
+                    {formatDate(a.match.date, "es-AR")}
                     {a.match.status === "PLAYED" && a.match.teamScore !== null && ` · ${a.match.teamScore}-${a.match.opponentScore}`}
                     {a.started && " · Citado"}
                   </p>

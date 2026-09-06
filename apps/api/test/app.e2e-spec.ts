@@ -28,6 +28,7 @@ describe("FutbolJoven API (e2e)", () => {
 
   let teamAId: string;
   let teamBId: string;
+  let categoryAId: string;
   let playerAId: string;
   let dimensionId: string;
   let physicalDimensionId: string;
@@ -93,6 +94,7 @@ describe("FutbolJoven API (e2e)", () => {
     const teamB = await prisma.team.create({ data: { name: "Team B", categoryId: categoryB.id, seasonId: season.id } });
     teamAId = teamA.id;
     teamBId = teamB.id;
+    categoryAId = categoryA.id;
 
     const passwordHash = await bcrypt.hash("Test1234!", 10);
     await prisma.user.create({
@@ -680,6 +682,167 @@ describe("FutbolJoven API (e2e)", () => {
         });
       expect(resultRes.status).toBe(201);
       expect(resultRes.body.appearances.every((a: any) => a.startingEleven)).toBe(true);
+    });
+  });
+
+  describe("Fase 6 — pulido", () => {
+    it("round-trips a date-only field without an off-by-one shift", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/api/evaluations")
+        .set("Cookie", coachCookie)
+        .send({ playerId: playerAId, teamId: teamAId, date: "2026-09-06", type: "MATCH", scores: [{ dimensionId, value: 7 }] });
+      expect(res.status).toBe(201);
+      expect(String(res.body.date)).toMatch(/^2026-09-06/);
+    });
+
+    it("returns the most recently created evaluation first when two share the same date", async () => {
+      const shared = { playerId: playerAId, teamId: teamAId, date: "2026-09-05", type: "MATCH" };
+      await request(app.getHttpServer()).post("/api/evaluations").set("Cookie", coachCookie).send({ ...shared, scores: [{ dimensionId, value: 5 }], observation: "primera" });
+      const second = await request(app.getHttpServer())
+        .post("/api/evaluations")
+        .set("Cookie", coachCookie)
+        .send({ ...shared, scores: [{ dimensionId, value: 9 }], observation: "segunda" });
+      expect(second.status).toBe(201);
+
+      const listRes = await request(app.getHttpServer()).get(`/api/evaluations/player/${playerAId}`).set("Cookie", coachCookie);
+      expect(listRes.status).toBe(200);
+      const sameDateEntries = listRes.body.filter((e: any) => String(e.date).startsWith("2026-09-05"));
+      expect(sameDateEntries[0].id).toBe(second.body.id);
+    });
+
+    it("saves a single player through the quick-evaluation endpoint", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/api/evaluations/quick")
+        .set("Cookie", coachCookie)
+        .send({
+          teamId: teamAId,
+          date: "2026-09-01",
+          type: "TRAINING",
+          entries: [{ playerId: playerAId, observation: null, scores: [{ dimensionId, value: 6 }] }],
+        });
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({ created: 1 });
+    });
+
+    describe("Inventory", () => {
+      let generalItemId: string;
+      let categoryItemId: string;
+
+      it("blocks a coach (no inventory permission) from creating an item", async () => {
+        const res = await request(app.getHttpServer()).post("/api/inventory").set("Cookie", coachCookie).send({ name: "Balones", quantity: 10 });
+        expect(res.status).toBe(403);
+      });
+
+      it("lets an admin create a general item and a category-specific item", async () => {
+        const generalRes = await request(app.getHttpServer())
+          .post("/api/inventory")
+          .set("Cookie", adminCookie)
+          .send({ name: "Balones N5", itemType: "Balones", quantity: 20, condition: "Bueno" });
+        expect(generalRes.status).toBe(201);
+        expect(generalRes.body.categoryId).toBeNull();
+        generalItemId = generalRes.body.id;
+
+        const categoryRes = await request(app.getHttpServer())
+          .post("/api/inventory")
+          .set("Cookie", adminCookie)
+          .send({ name: "Petos Sub-15", itemType: "Indumentaria", quantity: 15, condition: "Regular", categoryId: categoryAId });
+        expect(categoryRes.status).toBe(201);
+        expect(categoryRes.body.categoryId).toBe(categoryAId);
+        categoryItemId = categoryRes.body.id;
+      });
+
+      it("filtering by category returns both the category item and general items", async () => {
+        const res = await request(app.getHttpServer()).get(`/api/inventory?categoryId=${categoryAId}`).set("Cookie", adminCookie);
+        expect(res.status).toBe(200);
+        const ids = res.body.map((i: any) => i.id);
+        expect(ids).toContain(generalItemId);
+        expect(ids).toContain(categoryItemId);
+      });
+
+      it("updates and deletes an item", async () => {
+        const updateRes = await request(app.getHttpServer())
+          .patch(`/api/inventory/${generalItemId}`)
+          .set("Cookie", adminCookie)
+          .send({ quantity: 18 });
+        expect(updateRes.status).toBe(200);
+        expect(updateRes.body.quantity).toBe(18);
+
+        const deleteRes = await request(app.getHttpServer()).delete(`/api/inventory/${categoryItemId}`).set("Cookie", adminCookie);
+        expect(deleteRes.status).toBe(200);
+
+        const listRes = await request(app.getHttpServer()).get("/api/inventory").set("Cookie", adminCookie);
+        expect(listRes.body.map((i: any) => i.id)).not.toContain(categoryItemId);
+      });
+    });
+
+    it("includes health/medical fields in the full-field player export", async () => {
+      const res = await request(app.getHttpServer())
+        .get("/api/export/players?full=true")
+        .set("Cookie", adminCookie)
+        .buffer(true)
+        .parse((response, callback) => {
+          const chunks: Buffer[] = [];
+          response.on("data", (chunk: Buffer) => chunks.push(chunk));
+          response.on("end", () => callback(null, Buffer.concat(chunks)));
+        });
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toContain("spreadsheetml");
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(res.body);
+      const sheet = workbook.worksheets[0];
+      const headerRow = sheet.getRow(1).values as unknown[];
+      expect(headerRow.join(" ")).toContain("Alergias");
+      expect(headerRow.join(" ")).toContain("Contacto de emergencia");
+    });
+
+    it("generates a per-match PDF report", async () => {
+      const matchRes = await request(app.getHttpServer())
+        .post("/api/fixtures")
+        .set("Cookie", coachCookie)
+        .send({ teamId: teamAId, opponent: "Rival PDF", date: "2026-10-20" });
+      const matchId = matchRes.body.id;
+
+      const res = await request(app.getHttpServer()).get(`/api/reports/matches/${matchId}/pdf`).set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toBe("application/pdf");
+    });
+
+    it("generates a full-fixture PDF report", async () => {
+      const res = await request(app.getHttpServer()).get(`/api/reports/teams/${teamAId}/fixture-pdf`).set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toBe("application/pdf");
+    });
+
+    it("exports evaluations to xlsx by team and by player", async () => {
+      const byTeam = await request(app.getHttpServer()).get(`/api/export/evaluations?teamId=${teamAId}`).set("Cookie", adminCookie);
+      expect(byTeam.status).toBe(200);
+      expect(byTeam.headers["content-type"]).toContain("spreadsheetml");
+
+      const byPlayer = await request(app.getHttpServer()).get(`/api/export/evaluations?playerId=${playerAId}`).set("Cookie", adminCookie);
+      expect(byPlayer.status).toBe(200);
+      expect(byPlayer.headers["content-type"]).toContain("spreadsheetml");
+    });
+
+    it("updates a financial entry via PATCH", async () => {
+      const createRes = await request(app.getHttpServer())
+        .post("/api/finance")
+        .set("Cookie", adminCookie)
+        .send({ date: "2026-09-01", type: "EXPENSE", category: "Viajes", amount: 20000 });
+      expect(createRes.status).toBe(201);
+
+      const patchRes = await request(app.getHttpServer())
+        .patch(`/api/finance/${createRes.body.id}`)
+        .set("Cookie", adminCookie)
+        .send({ amount: 25000 });
+      expect(patchRes.status).toBe(200);
+      expect(patchRes.body.amount).toBe(25000);
+    });
+
+    it("generates the finance PDF report", async () => {
+      const res = await request(app.getHttpServer()).get("/api/reports/finance/pdf").set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toBe("application/pdf");
     });
   });
 });

@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/Input";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
+import { formatDate } from "@/lib/date";
 
 interface DocumentRow {
   documentType: { id: string; key: string; name: string; category: DocumentCategory; isRequired: boolean };
@@ -71,7 +72,7 @@ export function DocumentsTab({ playerId }: { playerId: string }) {
                       {!row.documentType.isRequired && <span className="ml-2 text-xs text-gris">(opcional)</span>}
                     </p>
                     {row.document?.submittedDate && (
-                      <p className="text-xs text-gris">Entregado el {new Date(row.document.submittedDate).toLocaleDateString("es-AR")}</p>
+                      <p className="text-xs text-gris">Entregado el {formatDate(row.document.submittedDate, "es-AR")}</p>
                     )}
                   </div>
                   {canManage ? (

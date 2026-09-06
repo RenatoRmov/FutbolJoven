@@ -3,17 +3,21 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { PERMISSIONS } from "@futboljoven/shared";
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table";
 import { Skeleton, EmptyState } from "@/components/ui/Skeleton";
 import { api } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 import { calculateAge, Category, Player, POSITION_LABELS, STATUS_LABELS, STATUS_TONE, Team } from "@/lib/types";
 
 export default function PlayersPage() {
   const searchParams = useSearchParams();
+  const { hasPermission } = useAuth();
   const [players, setPlayers] = useState<Player[] | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -54,7 +58,7 @@ export default function PlayersPage() {
       <Header title="Jugadores" />
       <div className="p-6">
         <Card className="mb-4">
-          <CardContent className="flex flex-wrap gap-3 py-4">
+          <CardContent className="flex flex-wrap items-center gap-3 py-4">
             <Input
               placeholder="Buscar por nombre..."
               value={search}
@@ -77,6 +81,21 @@ export default function PlayersPage() {
                 </option>
               ))}
             </Select>
+            {hasPermission(PERMISSIONS.DATA_EXPORT) && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="ml-auto"
+                onClick={() =>
+                  api.download(
+                    `/export/players?full=true${categoryId ? `&categoryId=${categoryId}` : ""}${status ? `&status=${status}` : ""}`,
+                    "jugadores.xlsx",
+                  )
+                }
+              >
+                Exportar Excel
+              </Button>
+            )}
           </CardContent>
         </Card>
 

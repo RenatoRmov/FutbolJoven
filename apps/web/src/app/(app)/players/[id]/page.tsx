@@ -18,6 +18,7 @@ import { MatchAppearancesTab } from "@/components/player/MatchAppearancesTab";
 import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
+import { formatDate } from "@/lib/date";
 import { calculateAge, ESTATUS_LABELS, ESTATUS_TONE, GENDER_LABELS, Player, POSITION_LABELS, STATUS_LABELS, STATUS_TONE } from "@/lib/types";
 
 interface EvolutionBucket {
@@ -34,6 +35,12 @@ interface EvolutionResponse {
   training: EvolutionBucket;
 }
 
+interface PhysicalRecordSummary {
+  id: string;
+  date: string;
+  metrics: Record<string, string | number>;
+}
+
 interface EvaluationListItem {
   id: string;
   date: string;
@@ -44,12 +51,27 @@ interface EvaluationListItem {
   scores: { value: number; dimension: { name: string } }[];
 }
 
+function computeImc(weight: number, height: number): number | null {
+  if (!weight || !height) return null;
+  const h = height / 100;
+  return weight / (h * h);
+}
+
+function classifyImc(imc: number | null): string {
+  if (imc === null) return "";
+  if (imc < 18.5) return "Riesgo de desnutrición";
+  if (imc < 25) return "Normal";
+  if (imc < 30) return "Sobrepeso";
+  return "Obesidad";
+}
+
 export default function PlayerProfilePage() {
   const params = useParams<{ id: string }>();
   const { hasPermission } = useAuth();
   const [player, setPlayer] = useState<Player | null>(null);
   const [evolution, setEvolution] = useState<EvolutionResponse | null>(null);
   const [evaluations, setEvaluations] = useState<EvaluationListItem[] | null>(null);
+  const [latestAnthro, setLatestAnthro] = useState<PhysicalRecordSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -66,6 +88,14 @@ export default function PlayerProfilePage() {
         setEvaluations(ev);
       })
       .finally(() => setLoading(false));
+  }, [params.id]);
+
+  useEffect(() => {
+    if (!params.id || !hasPermission(PERMISSIONS.PHYSICAL_VIEW)) return;
+    api
+      .get<PhysicalRecordSummary[]>(`/physical/player/${params.id}?recordType=ANTHROPOMETRIC`)
+      .then((records) => setLatestAnthro(records[0] ?? null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
   if (loading) {
@@ -164,7 +194,7 @@ export default function PlayerProfilePage() {
                 {player.gender && ` · ${GENDER_LABELS[player.gender] ?? player.gender}`}
               </p>
               <p className="text-xs text-gris">
-                En el club desde {new Date(player.joinDate).toLocaleDateString("es-AR")} · {player.city ?? ""} {player.nationality ? `(${player.nationality})` : ""}
+                En el club desde {formatDate(player.joinDate, "es-AR")} · {player.city ?? ""} {player.nationality ? `(${player.nationality})` : ""}
               </p>
             </div>
           </CardContent>
@@ -239,6 +269,33 @@ export default function PlayerProfilePage() {
                     )}
                   </CardContent>
                 </Card>
+                {hasPermission(PERMISSIONS.PHYSICAL_VIEW) && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Mediciones</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {latestAnthro ? (
+                        (() => {
+                          const weight = Number(latestAnthro.metrics.weight) || 0;
+                          const height = Number(latestAnthro.metrics.height) || 0;
+                          const imc = computeImc(weight, height);
+                          return (
+                            <div className="flex flex-wrap gap-2">
+                              {weight > 0 && <Badge tone="neutral">Peso: {weight} kg</Badge>}
+                              {height > 0 && <Badge tone="neutral">Talla: {height} cm</Badge>}
+                              {imc !== null && <Badge tone="neutral">IMC: {imc.toFixed(1)}</Badge>}
+                              {imc !== null && <Badge tone="neutral">{classifyImc(imc)}</Badge>}
+                              <span className="basis-full text-xs text-gris">Última medición: {formatDate(latestAnthro.date, "es-AR")}</span>
+                            </div>
+                          );
+                        })()
+                      ) : (
+                        <p className="text-sm text-gris">Sin mediciones antropométricas registradas.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
                 {player.notes && (
                   <Card>
                     <CardHeader>
@@ -252,6 +309,17 @@ export default function PlayerProfilePage() {
           </TabsContent>
 
           <TabsContent value="evaluaciones" className="pt-5">
+            {hasPermission(PERMISSIONS.DATA_EXPORT) && (
+              <div className="mb-3 flex justify-end">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => api.download(`/export/evaluations?playerId=${player.id}`, `evaluaciones-${player.firstName}-${player.lastName}.xlsx`)}
+                >
+                  Exportar Excel
+                </Button>
+              </div>
+            )}
             <Card>
               <CardContent className="divide-y divide-borde py-0">
                 {!evaluations || evaluations.length === 0 ? (
@@ -261,7 +329,7 @@ export default function PlayerProfilePage() {
                     <div key={ev.id} className="py-4">
                       <div className="mb-2 flex items-center justify-between">
                         <span className="text-sm font-medium text-carbon">
-                          {new Date(ev.date).toLocaleDateString("es-AR")} · {ev.context ?? ev.type}
+                          {formatDate(ev.date, "es-AR")} · {ev.context ?? ev.type}
                         </span>
                         <span className="text-xs text-gris">
                           {ev.evaluator.firstName} {ev.evaluator.lastName}
@@ -329,8 +397,8 @@ export default function PlayerProfilePage() {
                           <div className="absolute -ml-[25px] mt-1 h-3 w-3 rounded-full bg-rojo" />
                           <p className="text-sm font-medium text-carbon">{h.team.name}</p>
                           <p className="text-xs text-gris">
-                            {new Date(h.startDate).toLocaleDateString("es-AR")} —{" "}
-                            {h.endDate ? new Date(h.endDate).toLocaleDateString("es-AR") : "actualidad"}
+                            {formatDate(h.startDate, "es-AR")} —{" "}
+                            {h.endDate ? formatDate(h.endDate, "es-AR") : "actualidad"}
                           </p>
                         </li>
                       ))}

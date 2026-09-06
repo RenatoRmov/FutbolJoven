@@ -9,6 +9,7 @@ import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table";
 import { Skeleton, EmptyState } from "@/components/ui/Skeleton";
 import { api, ApiError } from "@/lib/api-client";
 import { Category, Player } from "@/lib/types";
+import { formatDate } from "@/lib/date";
 
 interface PhysicalRecord {
   id: string;
@@ -179,7 +180,7 @@ export default function PhysicalPerformancePage() {
                 <Tbody>
                   {records.map((r) => (
                     <Tr key={r.id}>
-                      <Td>{new Date(r.date).toLocaleDateString("es-CL")}</Td>
+                      <Td>{formatDate(r.date)}</Td>
                       {METRIC_FIELDS.map(([key]) => (
                         <Td key={key}>{r.metrics[key] ?? "—"}</Td>
                       ))}

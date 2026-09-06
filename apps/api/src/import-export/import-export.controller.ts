@@ -49,8 +49,25 @@ export class ImportExportController {
     @Query("teamId") teamId?: string,
     @Query("categoryId") categoryId?: string,
     @Query("status") status?: string,
+    @Query("full") full?: string,
   ) {
-    const buffer = await this.importExportService.exportPlayers(user, { teamId, categoryId, status });
+    const filters = { teamId, categoryId, status };
+    const buffer =
+      full === "true"
+        ? await this.importExportService.exportPlayersFull(user, filters)
+        : await this.importExportService.exportPlayers(user, filters);
     sendXlsx(res, buffer, "jugadores.xlsx");
+  }
+
+  @RequirePermission(PERMISSIONS.DATA_EXPORT)
+  @Get("export/evaluations")
+  async exportEvaluations(
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() res: Response,
+    @Query("teamId") teamId?: string,
+    @Query("playerId") playerId?: string,
+  ) {
+    const buffer = await this.importExportService.exportEvaluations(user, { teamId, playerId });
+    sendXlsx(res, buffer, "evaluaciones.xlsx");
   }
 }

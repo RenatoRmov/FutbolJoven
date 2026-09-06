@@ -43,6 +43,8 @@ export const PERMISSIONS = {
   FIXTURES_MANAGE_ASSIGNED: "fixtures.manage.assigned",
   FINANCE_VIEW: "finance.view",
   FINANCE_MANAGE: "finance.manage",
+  INVENTORY_VIEW: "inventory.view",
+  INVENTORY_MANAGE: "inventory.manage",
 
   // Reserved for future phases — permissions already exist so RBAC checks
   // can be wired without a schema change when the modules are built.
@@ -85,6 +87,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = 
     P.PLAYERS_DOCUMENTS_VIEW,
     P.FIXTURES_VIEW_ALL,
     P.FINANCE_VIEW,
+    P.INVENTORY_VIEW,
   ],
   COORDINATOR: [
     P.PLAYERS_VIEW_ALL,
@@ -103,6 +106,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, PermissionKey[]> = 
     P.FIXTURES_MANAGE_ALL,
     P.FINANCE_VIEW,
     P.FINANCE_MANAGE,
+    P.INVENTORY_VIEW,
+    P.INVENTORY_MANAGE,
   ],
   COACH: [
     P.PLAYERS_VIEW_ASSIGNED,

@@ -16,6 +16,7 @@ import { PlayerDocumentsModule } from "./player-documents/player-documents.modul
 import { ImportExportModule } from "./import-export/import-export.module";
 import { FixturesModule } from "./fixtures/fixtures.module";
 import { FinanceModule } from "./finance/finance.module";
+import { InventoryModule } from "./inventory/inventory.module";
 import { ReportsModule } from "./reports/reports.module";
 
 @Module({
@@ -37,6 +38,7 @@ import { ReportsModule } from "./reports/reports.module";
     ImportExportModule,
     FixturesModule,
     FinanceModule,
+    InventoryModule,
     ReportsModule,
   ],
 })

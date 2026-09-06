@@ -11,6 +11,7 @@ import { CategoryBarChart, CategoryBarPoint } from "@/components/charts/Category
 import { StatusBarChart, StatusBarPoint } from "@/components/charts/StatusBarChart";
 import { TrendLineChart, TrendPoint } from "@/components/charts/TrendLineChart";
 import { api } from "@/lib/api-client";
+import { formatDate } from "@/lib/date";
 
 interface PlayerDelta {
   playerId: string;
@@ -312,7 +313,7 @@ function AssignedDashboard({ summary }: { summary: AssignedSummary }) {
                     {e.player.firstName} {e.player.lastName}
                   </span>
                   <span className="text-xs text-gris">
-                    {new Date(e.date).toLocaleDateString("es-AR")} · {e.type}
+                    {formatDate(e.date, "es-AR")} · {e.type}
                   </span>
                 </li>
               ))}

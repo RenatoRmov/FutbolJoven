@@ -38,4 +38,25 @@ export class ReportsController {
     const buffer = await this.reportsService.buildPhysicalPerformancePdf(user, id);
     sendPdf(res, buffer, `rendimiento-fisico-${id}.pdf`);
   }
+
+  @RequirePermission(PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED)
+  @Get("matches/:id/pdf")
+  async matchPdf(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Res() res: Response) {
+    const buffer = await this.reportsService.buildMatchReportPdf(user, id);
+    sendPdf(res, buffer, `partido-${id}.pdf`);
+  }
+
+  @RequirePermission(PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED)
+  @Get("teams/:id/fixture-pdf")
+  async fixturePdf(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Res() res: Response) {
+    const buffer = await this.reportsService.buildFixtureReportPdf(user, id);
+    sendPdf(res, buffer, `fixture-${id}.pdf`);
+  }
+
+  @RequirePermission(PERMISSIONS.FINANCE_VIEW, PERMISSIONS.FINANCE_MANAGE)
+  @Get("finance/pdf")
+  async financePdf(@Res() res: Response) {
+    const buffer = await this.reportsService.buildFinanceReportPdf();
+    sendPdf(res, buffer, "reporte-financiero.pdf");
+  }
 }
