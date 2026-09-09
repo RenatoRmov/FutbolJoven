@@ -39,6 +39,13 @@ export class ReportsController {
     sendPdf(res, buffer, `rendimiento-fisico-${id}.pdf`);
   }
 
+  @RequirePermission(PERMISSIONS.PHYSICAL_VIEW, PERMISSIONS.PHYSICAL_MANAGE)
+  @Get("players/:id/weight-check-pdf")
+  async weightCheckPdf(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Res() res: Response) {
+    const buffer = await this.reportsService.buildWeightCheckPdf(user, id);
+    sendPdf(res, buffer, `revision-de-peso-${id}.pdf`);
+  }
+
   @RequirePermission(PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED)
   @Get("matches/:id/pdf")
   async matchPdf(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Res() res: Response) {

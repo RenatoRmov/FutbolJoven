@@ -503,12 +503,23 @@ export function FichaMedicaModal({
         </TabsContent>
 
         <TabsContent value="revision-peso" className="pt-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gris">
-            Nueva revisión de peso
-          </p>
-          <p className="mb-3 text-[11px] text-gris">
-            Registro simple y frecuente (peso, talla, edad e IMC), separado de la Evaluación Antropométrica de Área Médica.
-          </p>
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gris">Nueva revisión de peso</p>
+              <p className="mt-1 text-[11px] text-gris">
+                Registro simple y frecuente (peso, talla, edad e IMC), separado de la Evaluación Antropométrica de Área Médica.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="shrink-0"
+              onClick={() => api.download(`/reports/players/${playerId}/weight-check-pdf`, `revision-de-peso-${playerName}.pdf`)}
+            >
+              Exportar PDF
+            </Button>
+          </div>
 
           <form onSubmit={handleSaveWeightCheck} className="space-y-3">
             <div>

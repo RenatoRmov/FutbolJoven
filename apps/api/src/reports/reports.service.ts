@@ -449,6 +449,81 @@ export class ReportsService {
   }
 
   /**
+   * Revisión de Peso — control semanal de peso/talla/edad/IMC. Deliberately
+   * separate from la Evaluación Antropométrica de Área Médica (su propia
+   * sección en buildPlayerReportPdf), ya que este dato se ingresa con mayor
+   * frecuencia y por personal distinto.
+   */
+  async buildWeightCheckPdf(user: AuthenticatedUser, playerId: string): Promise<Buffer> {
+    const player = await this.prisma.player.findUnique({
+      where: { id: playerId },
+      include: { currentTeam: { include: { category: true } } },
+    });
+    if (!player) throw new NotFoundException("Jugador no encontrado");
+
+    const records = await this.prisma.physicalRecord.findMany({
+      where: { playerId, recordType: "WEIGHT_CHECK" },
+      include: { recordedBy: { select: { firstName: true, lastName: true } } },
+      orderBy: { date: "desc" },
+    });
+    const parsed = records.map((r) => {
+      const metrics = JSON.parse(r.metrics) as Record<string, number>;
+      const imc = metrics.weight && metrics.height ? Number((metrics.weight / (metrics.height / 100) ** 2).toFixed(1)) : null;
+      const clasificacion = imc === null ? "—" : imc < 18.5 ? "Riesgo de desnutrición" : imc < 25 ? "Normal" : imc < 30 ? "Sobrepeso" : "Obesidad";
+      return { date: r.date, metrics, imc, clasificacion, recordedBy: r.recordedBy };
+    });
+    const latest = parsed[0] ?? null;
+
+    return renderPdfToBuffer((doc) => {
+      addHeader(doc, `${player.firstName} ${player.lastName}`, "Revisión de Peso");
+      const category = player.currentTeam?.category?.name ?? "Sin categoría";
+      doc.fontSize(10).fillColor(COLORS.gris);
+      fullWidthText(doc, category);
+      doc.moveDown(0.8);
+
+      sectionTitle(doc, latest ? `Última revisión (${formatDate(latest.date)})` : "Última revisión");
+      if (!latest) {
+        doc.fontSize(9).fillColor(COLORS.gris);
+        fullWidthText(doc, "Sin revisiones de peso registradas.");
+      } else {
+        const cardGap = 8;
+        const cardW = (PAGE_CONTENT_WIDTH - cardGap * 4) / 5;
+        const cardH = 34;
+        const cardY = doc.y;
+        const cards: [string, string][] = [
+          [latest.metrics.weight !== undefined ? `${latest.metrics.weight} kg` : "—", "Peso"],
+          [latest.metrics.height !== undefined ? `${latest.metrics.height} cm` : "—", "Talla"],
+          [latest.metrics.age !== undefined ? String(latest.metrics.age) : "—", "Edad"],
+          [latest.imc !== null ? String(latest.imc) : "—", "IMC"],
+          [latest.clasificacion, "Clasificación"],
+        ];
+        cards.forEach(([value, label], i) => drawStatCard(doc, PAGE_MARGIN + i * (cardW + cardGap), cardY, cardW, cardH, value, label));
+        doc.y = cardY + cardH + 14;
+      }
+
+      sectionTitle(doc, "Historial de revisiones");
+      if (parsed.length === 0) {
+        doc.fontSize(9).fillColor(COLORS.gris);
+        fullWidthText(doc, "Sin revisiones de peso registradas.");
+      } else {
+        doc.fontSize(8).fillColor(COLORS.rojoOscuro).font("Helvetica-Bold");
+        fullWidthText(doc, "Fecha        Peso        Talla        Edad        IMC        Clasificación        Registró");
+        doc.font("Helvetica");
+        for (const r of parsed) {
+          ensureSpace(doc, 14);
+          doc.fontSize(8).fillColor(COLORS.carbon);
+          fullWidthText(
+            doc,
+            `${formatDate(r.date)}   ${r.metrics.weight !== undefined ? `${r.metrics.weight}kg` : "—"}      ${r.metrics.height !== undefined ? `${r.metrics.height}cm` : "—"}      ${r.metrics.age !== undefined ? r.metrics.age : "—"}      ${r.imc !== null ? r.imc : "—"}      ${r.clasificacion}      ${r.recordedBy.firstName} ${r.recordedBy.lastName}`,
+          );
+        }
+      }
+
+      addSignatureBlock(doc);
+    });
+  }
+
+  /**
    * One match, full detail: rival/fecha/condición/logística, cuerpo técnico,
    * traslados (si es de visita) y la nómina completa de citados/titulares.
    */

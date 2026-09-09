@@ -35,7 +35,17 @@ interface Match {
   status: string;
   teamScore: number | null;
   opponentScore: number | null;
-  appearances: { id: string; playerId: string; minutesPlayed: number | null; goals: number; yellowCards: number; redCard: boolean; player: { firstName: string; lastName: string } }[];
+  appearances: {
+    id: string;
+    playerId: string;
+    started: boolean;
+    startingEleven: boolean;
+    minutesPlayed: number | null;
+    goals: number;
+    yellowCards: number;
+    redCard: boolean;
+    player: { firstName: string; lastName: string };
+  }[];
 }
 
 type MatchFormState = {
@@ -440,11 +450,9 @@ function MatchCard({
               </div>
             )}
             <Badge tone={STATUS_TONE[match.status] ?? "neutral"}>{MATCH_STATUS_LABELS[match.status as keyof typeof MATCH_STATUS_LABELS] ?? match.status}</Badge>
-            {match.status !== "PLAYED" && (
-              <Button size="sm" variant="secondary" onClick={onToggleResult}>
-                {expanded ? "Cerrar" : "Cargar resultado"}
-              </Button>
-            )}
+            <Button size="sm" variant="secondary" onClick={onToggleResult}>
+              {expanded ? "Cerrar" : match.status === "PLAYED" ? "Editar resultado" : "Cargar resultado"}
+            </Button>
             <Button
               size="sm"
               variant="ghost"
@@ -461,7 +469,7 @@ function MatchCard({
           </div>
         </div>
 
-        {expanded && <ResultForm matchId={match.id} players={players} onSaved={onSaved} />}
+        {expanded && <ResultForm match={match} players={players} onSaved={onSaved} />}
         {editing && <EditForm match={match} onSave={onUpdate} onCancel={onToggleEdit} />}
       </CardContent>
     </Card>
@@ -502,12 +510,30 @@ function EditForm({ match, onSave, onCancel }: { match: Match; onSave: (form: Ma
   );
 }
 
-function ResultForm({ matchId, players, onSaved }: { matchId: string; players: Player[]; onSaved: () => void }) {
-  const [teamScore, setTeamScore] = useState("0");
-  const [opponentScore, setOpponentScore] = useState("0");
-  const [rows, setRows] = useState<Record<string, { started: boolean; startingEleven: boolean; minutesPlayed: string; goals: string; yellowCards: string; redCard: boolean }>>(() =>
-    Object.fromEntries(players.map((p) => [p.id, { started: false, startingEleven: false, minutesPlayed: "", goals: "0", yellowCards: "0", redCard: false }])),
-  );
+function ResultForm({ match, players, onSaved }: { match: Match; players: Player[]; onSaved: () => void }) {
+  const [teamScore, setTeamScore] = useState(String(match.teamScore ?? 0));
+  const [opponentScore, setOpponentScore] = useState(String(match.opponentScore ?? 0));
+  const [rows, setRows] = useState<Record<string, { started: boolean; startingEleven: boolean; minutesPlayed: string; goals: string; yellowCards: string; redCard: boolean }>>(() => {
+    const appearanceByPlayer = new Map(match.appearances.map((a) => [a.playerId, a]));
+    return Object.fromEntries(
+      players.map((p) => {
+        const a = appearanceByPlayer.get(p.id);
+        return [
+          p.id,
+          a
+            ? {
+                started: a.started,
+                startingEleven: a.startingEleven,
+                minutesPlayed: a.minutesPlayed !== null ? String(a.minutesPlayed) : "",
+                goals: String(a.goals),
+                yellowCards: String(a.yellowCards),
+                redCard: a.redCard,
+              }
+            : { started: false, startingEleven: false, minutesPlayed: "", goals: "0", yellowCards: "0", redCard: false },
+        ];
+      }),
+    );
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -543,7 +569,7 @@ function ResultForm({ matchId, players, onSaved }: { matchId: string; players: P
 
       if (appearances.length === 0) throw new ApiError(400, "Cargá al menos un jugador con minutos o citado");
 
-      await api.post(`/fixtures/${matchId}/result`, { teamScore: Number(teamScore), opponentScore: Number(opponentScore), appearances });
+      await api.post(`/fixtures/${match.id}/result`, { teamScore: Number(teamScore), opponentScore: Number(opponentScore), appearances });
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo guardar el resultado");

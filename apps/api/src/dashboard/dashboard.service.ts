@@ -189,18 +189,19 @@ export class DashboardService {
   /**
    * "Promedio de mediciones y nutrición" — deliberately kept to two concrete,
    * comparable figures: average height (from Player.height) and average BMI
-   * from each player's most recent NutritionRecord (weight/height² — real
-   * units, unlike PhysicalRecord.metrics which is a free-form JSON blob with
-   * no fixed unit per test, so it can't be meaningfully averaged into a
-   * single index). Aptitud is derived from each player's most recent Injury:
-   * no active/recovering injury -> apto; RECOVERING -> enReintegro; ACTIVE -> noApto.
+   * from each player's most recent Evaluación Antropométrica (Área Médica,
+   * PhysicalRecord.recordType = ANTHROPOMETRIC). BMI must come from this
+   * specific source — not Nutrición nor Revisión de Peso — since it's the
+   * one staff actually keeps current. Aptitud is derived from each player's
+   * most recent Injury: no active/recovering injury -> apto;
+   * RECOVERING -> enReintegro; ACTIVE -> noApto.
    */
   private async computeMeasurementStats() {
-    const [players, latestNutrition, latestInjuries] = await Promise.all([
+    const [players, latestAnthro, latestInjuries] = await Promise.all([
       this.prisma.player.findMany({ where: { status: "ACTIVE" }, select: { id: true, height: true } }),
-      this.prisma.nutritionRecord.findMany({
-        where: { player: { status: "ACTIVE" } },
-        select: { playerId: true, date: true, weight: true, height: true },
+      this.prisma.physicalRecord.findMany({
+        where: { recordType: "ANTHROPOMETRIC", player: { status: "ACTIVE" } },
+        select: { playerId: true, date: true, metrics: true },
         orderBy: { date: "desc" },
       }),
       this.prisma.injury.findMany({
@@ -213,15 +214,17 @@ export class DashboardService {
     const heights = players.map((p) => p.height).filter((h): h is number => h !== null);
     const avgHeight = average(heights);
 
-    const latestNutritionByPlayer = new Map<string, { weight: number | null; height: number | null }>();
-    for (const record of latestNutrition) {
-      if (!latestNutritionByPlayer.has(record.playerId)) {
-        latestNutritionByPlayer.set(record.playerId, { weight: record.weight, height: record.height });
-      }
+    const latestAnthroByPlayer = new Map<string, { weight: number | null; height: number | null }>();
+    for (const record of latestAnthro) {
+      if (latestAnthroByPlayer.has(record.playerId)) continue;
+      const metrics = JSON.parse(record.metrics) as Record<string, string | number>;
+      const weight = metrics.weight !== undefined ? Number(metrics.weight) : null;
+      const height = metrics.height !== undefined ? Number(metrics.height) : null;
+      latestAnthroByPlayer.set(record.playerId, { weight, height });
     }
     const bmis: number[] = [];
-    for (const { weight, height } of latestNutritionByPlayer.values()) {
-      if (weight === null || height === null || height <= 0) continue;
+    for (const { weight, height } of latestAnthroByPlayer.values()) {
+      if (weight === null || height === null || !weight || !height) continue;
       const heightMeters = height / 100;
       bmis.push(weight / (heightMeters * heightMeters));
     }

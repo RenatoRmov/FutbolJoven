@@ -845,4 +845,63 @@ describe("FutbolJoven API (e2e)", () => {
       expect(res.headers["content-type"]).toBe("application/pdf");
     });
   });
+
+  describe("Fase 6b — resultado editable, PDF Revisión de Peso, IMC del dashboard", () => {
+    it("lets a coach re-record a match result to correct a mistake", async () => {
+      const createRes = await request(app.getHttpServer())
+        .post("/api/fixtures")
+        .set("Cookie", coachCookie)
+        .send({ teamId: teamAId, opponent: "Rival Corrección", date: "2026-10-25" });
+      const matchId = createRes.body.id;
+
+      const firstResult = await request(app.getHttpServer())
+        .post(`/api/fixtures/${matchId}/result`)
+        .set("Cookie", coachCookie)
+        .send({ teamScore: 1, opponentScore: 0, appearances: [{ playerId: playerAId, started: true, minutesPlayed: 90, goals: 0, yellowCards: 0 }] });
+      expect(firstResult.status).toBe(201);
+      expect(firstResult.body.teamScore).toBe(1);
+
+      const correctedResult = await request(app.getHttpServer())
+        .post(`/api/fixtures/${matchId}/result`)
+        .set("Cookie", coachCookie)
+        .send({ teamScore: 3, opponentScore: 2, appearances: [{ playerId: playerAId, started: true, minutesPlayed: 90, goals: 2, yellowCards: 1 }] });
+      expect(correctedResult.status).toBe(201);
+      expect(correctedResult.body.teamScore).toBe(3);
+      expect(correctedResult.body.opponentScore).toBe(2);
+      // Re-recording must replace, not accumulate, appearances.
+      expect(correctedResult.body.appearances).toHaveLength(1);
+      expect(correctedResult.body.appearances[0].goals).toBe(2);
+
+      const getRes = await request(app.getHttpServer()).get(`/api/fixtures/${matchId}`).set("Cookie", coachCookie);
+      expect(getRes.body.teamScore).toBe(3);
+      expect(getRes.body.appearances).toHaveLength(1);
+    });
+
+    it("generates the Revisión de Peso PDF for a player", async () => {
+      await request(app.getHttpServer())
+        .post("/api/physical")
+        .set("Cookie", adminCookie)
+        .send({ playerId: playerAId, date: "2026-09-01", recordType: "WEIGHT_CHECK", metrics: { weight: 60, height: 170, age: 15 } });
+
+      const res = await request(app.getHttpServer()).get(`/api/reports/players/${playerAId}/weight-check-pdf`).set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toBe("application/pdf");
+    });
+
+    it("computes the dashboard's average BMI only from Área Médica (ANTHROPOMETRIC) records, not from Revisión de Peso", async () => {
+      await request(app.getHttpServer())
+        .post("/api/physical")
+        .set("Cookie", adminCookie)
+        .send({ playerId: playerAId, date: "2026-09-06", recordType: "ANTHROPOMETRIC", metrics: { weight: 70, height: 175 } });
+      // A wildly different WEIGHT_CHECK value that would obviously skew the average if it were wrongly included.
+      await request(app.getHttpServer())
+        .post("/api/physical")
+        .set("Cookie", adminCookie)
+        .send({ playerId: playerAId, date: "2026-09-07", recordType: "WEIGHT_CHECK", metrics: { weight: 200, height: 50 } });
+
+      const res = await request(app.getHttpServer()).get("/api/dashboard/summary").set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.body.kpis.avgBmi).toBeCloseTo(70 / (1.75 * 1.75), 1);
+    });
+  });
 });
