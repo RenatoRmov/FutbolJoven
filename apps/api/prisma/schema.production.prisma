@@ -632,11 +632,13 @@ model FinancialEntry {
 model InventoryItem {
   id String @id @default(uuid())
 
-  name         String
-  itemType     String? // agrupación libre: "Balones", "Indumentaria", "Médico", etc.
-  quantity     Int     @default(0)
-  condition    String? // "Bueno" | "Regular" | "Malo"
-  observations String?
+  name           String
+  itemType       String? // agrupación libre: "Balones", "Indumentaria", "Médico", etc.
+  quantity       Int     @default(0)
+  neededQuantity Int? // cantidad necesaria (planificación/necesidad del club)
+  toPurchase     Int? // cantidad a comprar — campo editable independiente, no derivado
+  condition      String? // "Bueno" | "Regular" | "Malo"
+  observations   String?
 
   categoryId String? // null = general del club; si no, específico de esa categoría
   category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)

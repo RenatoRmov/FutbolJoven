@@ -904,4 +904,36 @@ describe("FutbolJoven API (e2e)", () => {
       expect(res.body.kpis.avgBmi).toBeCloseTo(70 / (1.75 * 1.75), 1);
     });
   });
+
+  describe("Fase 6c — Inventario: cantidad necesaria/a comprar y export a Excel", () => {
+    it("stores and returns neededQuantity and toPurchase independently", async () => {
+      const createRes = await request(app.getHttpServer())
+        .post("/api/inventory")
+        .set("Cookie", adminCookie)
+        .send({ name: "Conos platillo", itemType: "Coordinación", quantity: 0, neededQuantity: 120, toPurchase: 120, condition: null });
+      expect(createRes.status).toBe(201);
+      expect(createRes.body.neededQuantity).toBe(120);
+      expect(createRes.body.toPurchase).toBe(120);
+
+      const updateRes = await request(app.getHttpServer())
+        .patch(`/api/inventory/${createRes.body.id}`)
+        .set("Cookie", adminCookie)
+        .send({ quantity: 60, toPurchase: 60 });
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body.quantity).toBe(60);
+      expect(updateRes.body.neededQuantity).toBe(120);
+      expect(updateRes.body.toPurchase).toBe(60);
+    });
+
+    it("exports inventory to xlsx", async () => {
+      const res = await request(app.getHttpServer()).get("/api/export/inventory").set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toContain("spreadsheetml");
+    });
+
+    it("blocks a coach (no inventory permission) from exporting inventory", async () => {
+      const res = await request(app.getHttpServer()).get("/api/export/inventory").set("Cookie", coachCookie);
+      expect(res.status).toBe(403);
+    });
+  });
 });

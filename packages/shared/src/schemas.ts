@@ -306,6 +306,8 @@ export const createInventoryItemSchema = z.object({
   name: z.string().min(1).max(120),
   itemType: z.string().max(80).optional().nullable(),
   quantity: z.coerce.number().int().min(0).max(999_999),
+  neededQuantity: z.coerce.number().int().min(0).max(999_999).optional().nullable(),
+  toPurchase: z.coerce.number().int().min(0).max(999_999).optional().nullable(),
   condition: inventoryConditionEnum.optional().nullable(),
   categoryId: z.string().uuid().optional().nullable(),
   observations: z.string().max(500).optional().nullable(),

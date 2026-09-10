@@ -18,6 +18,8 @@ interface InventoryItem {
   name: string;
   itemType: string | null;
   quantity: number;
+  neededQuantity: number | null;
+  toPurchase: number | null;
   condition: string | null;
   observations: string | null;
   categoryId: string | null;
@@ -26,7 +28,7 @@ interface InventoryItem {
 
 const CONDITIONS = ["Bueno", "Regular", "Malo"];
 
-const emptyForm = { name: "", itemType: "", quantity: "1", condition: "Bueno", categoryId: "", observations: "" };
+const emptyForm = { name: "", itemType: "", quantity: "1", neededQuantity: "", toPurchase: "", condition: "Bueno", categoryId: "", observations: "" };
 
 export default function InventoryPage() {
   const { hasPermission } = useAuth();
@@ -61,6 +63,8 @@ export default function InventoryPage() {
       name: item.name,
       itemType: item.itemType ?? "",
       quantity: String(item.quantity),
+      neededQuantity: item.neededQuantity !== null ? String(item.neededQuantity) : "",
+      toPurchase: item.toPurchase !== null ? String(item.toPurchase) : "",
       condition: item.condition ?? "Bueno",
       categoryId: item.categoryId ?? "",
       observations: item.observations ?? "",
@@ -81,6 +85,8 @@ export default function InventoryPage() {
         name: form.name,
         itemType: form.itemType || null,
         quantity: Number(form.quantity),
+        neededQuantity: form.neededQuantity ? Number(form.neededQuantity) : null,
+        toPurchase: form.toPurchase ? Number(form.toPurchase) : null,
         condition: form.condition || null,
         categoryId: form.categoryId || null,
         observations: form.observations || null,
@@ -121,6 +127,9 @@ export default function InventoryPage() {
               ))}
             </Select>
           </div>
+          <Button variant="secondary" size="sm" onClick={() => api.download("/export/inventory", "inventario.xlsx")}>
+            Exportar Excel
+          </Button>
         </div>
 
         {canManage && (
@@ -143,6 +152,14 @@ export default function InventoryPage() {
                   <Input type="number" min={0} required value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
                 </div>
                 <div>
+                  <Label>Cantidad necesaria</Label>
+                  <Input type="number" min={0} value={form.neededQuantity} onChange={(e) => setForm({ ...form, neededQuantity: e.target.value })} />
+                </div>
+                <div>
+                  <Label>A comprar</Label>
+                  <Input type="number" min={0} value={form.toPurchase} onChange={(e) => setForm({ ...form, toPurchase: e.target.value })} />
+                </div>
+                <div>
                   <Label>Estado</Label>
                   <Select value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })}>
                     {CONDITIONS.map((c) => (
@@ -163,7 +180,7 @@ export default function InventoryPage() {
                     ))}
                   </Select>
                 </div>
-                <div className="md:col-span-4">
+                <div className="md:col-span-3">
                   <Label>Observaciones</Label>
                   <Input value={form.observations} onChange={(e) => setForm({ ...form, observations: e.target.value })} />
                 </div>
@@ -200,6 +217,8 @@ export default function InventoryPage() {
                 <Th>Nombre</Th>
                 <Th>Tipo</Th>
                 <Th>Cantidad</Th>
+                <Th>Cantidad necesaria</Th>
+                <Th>A comprar</Th>
                 <Th>Estado</Th>
                 <Th>Categoría</Th>
                 <Th>Observaciones</Th>
@@ -212,6 +231,8 @@ export default function InventoryPage() {
                   <Td className="font-medium text-carbon">{item.name}</Td>
                   <Td className="text-gris">{item.itemType ?? "—"}</Td>
                   <Td>{item.quantity}</Td>
+                  <Td className="text-gris">{item.neededQuantity ?? "—"}</Td>
+                  <Td className={item.toPurchase ? "font-medium text-rojo-oscuro" : "text-gris"}>{item.toPurchase ?? "—"}</Td>
                   <Td>
                     {item.condition && (
                       <Badge tone={item.condition === "Bueno" ? "success" : item.condition === "Regular" ? "warning" : "danger"}>{item.condition}</Badge>

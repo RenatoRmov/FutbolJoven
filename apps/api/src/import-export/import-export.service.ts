@@ -422,6 +422,42 @@ export class ImportExportService {
     return Buffer.from(buffer);
   }
 
+  async exportInventory(): Promise<Buffer> {
+    const items = await this.prisma.inventoryItem.findMany({
+      include: { category: { select: { name: true } } },
+      orderBy: [{ itemType: "asc" }, { name: "asc" }],
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Inventario");
+    sheet.columns = [
+      { header: "Nombre", key: "name", width: 34 },
+      { header: "Tipo", key: "itemType", width: 20 },
+      { header: "Cantidad", key: "quantity", width: 12 },
+      { header: "Cantidad necesaria", key: "neededQuantity", width: 16 },
+      { header: "A comprar", key: "toPurchase", width: 12 },
+      { header: "Estado", key: "condition", width: 14 },
+      { header: "Categoría", key: "category", width: 20 },
+      { header: "Observaciones", key: "observations", width: 40 },
+    ];
+    sheet.getRow(1).font = { bold: true };
+    for (const item of items) {
+      sheet.addRow({
+        name: item.name,
+        itemType: item.itemType ?? "",
+        quantity: item.quantity,
+        neededQuantity: item.neededQuantity ?? "",
+        toPurchase: item.toPurchase ?? "",
+        condition: item.condition ?? "",
+        category: item.category?.name ?? "General (todo el club)",
+        observations: item.observations ?? "",
+      });
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
   private async parseWorkbook(fileBuffer: Buffer): Promise<Record<string, unknown>[]> {
     const workbook = new ExcelJS.Workbook();
     try {

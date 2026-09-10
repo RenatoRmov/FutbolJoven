@@ -70,4 +70,11 @@ export class ImportExportController {
     const buffer = await this.importExportService.exportEvaluations(user, { teamId, playerId });
     sendXlsx(res, buffer, "evaluaciones.xlsx");
   }
+
+  @RequirePermission(PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.INVENTORY_MANAGE)
+  @Get("export/inventory")
+  async exportInventory(@Res() res: Response) {
+    const buffer = await this.importExportService.exportInventory();
+    sendXlsx(res, buffer, "inventario.xlsx");
+  }
 }
