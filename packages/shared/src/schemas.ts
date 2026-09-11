@@ -252,6 +252,8 @@ export const createMatchSchema = z.object({
   physicalTrainerName: z.string().max(150).optional().nullable(),
   kineName: z.string().max(150).optional().nullable(),
   equipmentManagerName: z.string().max(150).optional().nullable(),
+  goalkeeperCoachName: z.string().max(150).optional().nullable(),
+  coordinatorName: z.string().max(150).optional().nullable(),
   otherStaffNotes: z.string().max(500).optional().nullable(),
   // Traslados / alojamiento — solo relevantes cuando isHome = false.
   techStaffArrivalTime: z.string().max(20).optional().nullable(),

@@ -77,4 +77,16 @@ export class ImportExportController {
     const buffer = await this.importExportService.exportInventory();
     sendXlsx(res, buffer, "inventario.xlsx");
   }
+
+  @RequirePermission(PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED)
+  @Get("export/fixtures")
+  async exportFixtures(
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() res: Response,
+    @Query("startDate") startDate: string,
+    @Query("endDate") endDate: string,
+  ) {
+    const buffer = await this.importExportService.exportFixtures(user, { startDate, endDate });
+    sendXlsx(res, buffer, `fixture-${startDate}_a_${endDate}.xlsx`);
+  }
 }

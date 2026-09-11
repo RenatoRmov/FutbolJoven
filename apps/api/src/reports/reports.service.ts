@@ -16,6 +16,7 @@ import {
   drawMiniTable,
   drawRadarChart,
   drawStatCard,
+  drawTable,
   ensureSpace,
   formatDate,
   fullWidthText,
@@ -617,8 +618,10 @@ export class ReportsService {
     const staffRows: [string, string | null | undefined][] = [
       ["Entrenador", match.coachName],
       ["Preparador físico", match.physicalTrainerName],
+      ["Preparador de Arqueros", match.goalkeeperCoachName],
       ["Kinesiólogo", match.kineName],
       ["Utilero", match.equipmentManagerName],
+      ["Coordinador", match.coordinatorName],
       ["Otro", match.otherStaffNotes],
     ];
     const anyStaff = staffRows.some(([, v]) => v);
@@ -663,18 +666,27 @@ export class ReportsService {
         fullWidthText(doc, "Sin citación cargada.");
       } else {
         const sorted = [...appearances].sort((a, b) => a.player.lastName.localeCompare(b.player.lastName));
-        doc.fontSize(8).fillColor(COLORS.rojoOscuro).font("Helvetica-Bold");
-        fullWidthText(doc, "Jugador                            Citado   Titular   Min.   Goles   Amar.   Roja");
-        doc.font("Helvetica");
-        for (const a of sorted) {
-          ensureSpace(doc, 14);
-          const name = `${a.player.firstName} ${a.player.lastName}`;
-          doc.fontSize(8).fillColor(COLORS.carbon);
-          fullWidthText(
-            doc,
-            `${name.padEnd(30).slice(0, 30)}   ${a.started ? "Sí" : "No"}       ${a.startingEleven ? "Sí" : "No"}       ${a.minutesPlayed ?? "-"}      ${a.goals}       ${a.yellowCards}       ${a.redCard ? "Sí" : "No"}`,
-          );
-        }
+        drawTable(
+          doc,
+          [
+            { key: "jugador", header: "Jugador", width: 205 },
+            { key: "citado", header: "Citado", width: 48, align: "center" },
+            { key: "titular", header: "Titular", width: 48, align: "center" },
+            { key: "min", header: "Min.", width: 44, align: "center" },
+            { key: "goles", header: "Goles", width: 44, align: "center" },
+            { key: "amar", header: "Amar.", width: 44, align: "center" },
+            { key: "roja", header: "Roja", width: 42, align: "center" },
+          ],
+          sorted.map((a) => ({
+            jugador: `${a.player.firstName} ${a.player.lastName}`,
+            citado: a.started ? "Sí" : "No",
+            titular: a.startingEleven ? "Sí" : "No",
+            min: a.minutesPlayed !== null ? String(a.minutesPlayed) : "—",
+            goles: String(a.goals),
+            amar: String(a.yellowCards),
+            roja: a.redCard ? "Sí" : "No",
+          })),
+        );
       }
     }
   }

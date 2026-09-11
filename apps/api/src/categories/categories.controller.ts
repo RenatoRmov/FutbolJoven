@@ -11,8 +11,8 @@ export class CategoriesController {
   constructor(private categoriesService: CategoriesService) {}
 
   @Get()
-  findAll(@Query("includeInactive") includeInactive?: string) {
-    return this.categoriesService.findAll(includeInactive === "true");
+  findAll(@CurrentUser() user: AuthenticatedUser, @Query("includeInactive") includeInactive?: string) {
+    return this.categoriesService.findAll(user, includeInactive === "true");
   }
 
   @Get(":id")

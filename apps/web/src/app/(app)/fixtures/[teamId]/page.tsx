@@ -26,6 +26,8 @@ interface Match {
   physicalTrainerName: string | null;
   kineName: string | null;
   equipmentManagerName: string | null;
+  goalkeeperCoachName: string | null;
+  coordinatorName: string | null;
   otherStaffNotes: string | null;
   techStaffArrivalTime: string | null;
   playersArrivalTime: string | null;
@@ -60,6 +62,8 @@ type MatchFormState = {
   physicalTrainerName: string;
   kineName: string;
   equipmentManagerName: string;
+  goalkeeperCoachName: string;
+  coordinatorName: string;
   otherStaffNotes: string;
   techStaffArrivalTime: string;
   playersArrivalTime: string;
@@ -87,6 +91,8 @@ const emptyForm: MatchFormState = {
   physicalTrainerName: "",
   kineName: "",
   equipmentManagerName: "",
+  goalkeeperCoachName: "",
+  coordinatorName: "",
   otherStaffNotes: "",
   techStaffArrivalTime: "",
   playersArrivalTime: "",
@@ -108,6 +114,8 @@ function matchToForm(match: Match): MatchFormState {
     physicalTrainerName: match.physicalTrainerName ?? "",
     kineName: match.kineName ?? "",
     equipmentManagerName: match.equipmentManagerName ?? "",
+    goalkeeperCoachName: match.goalkeeperCoachName ?? "",
+    coordinatorName: match.coordinatorName ?? "",
     otherStaffNotes: match.otherStaffNotes ?? "",
     techStaffArrivalTime: match.techStaffArrivalTime ?? "",
     playersArrivalTime: match.playersArrivalTime ?? "",
@@ -130,6 +138,8 @@ function matchFormToPayload(form: MatchFormState) {
     physicalTrainerName: form.physicalTrainerName || null,
     kineName: form.kineName || null,
     equipmentManagerName: form.equipmentManagerName || null,
+    goalkeeperCoachName: form.goalkeeperCoachName || null,
+    coordinatorName: form.coordinatorName || null,
     otherStaffNotes: form.otherStaffNotes || null,
     ...(form.isHome === "false"
       ? {
@@ -325,6 +335,14 @@ function MatchFormFields({ form, setForm, formKey }: { form: MatchFormState; set
         <Label>Utilero</Label>
         <Input value={form.equipmentManagerName} onChange={(e) => setForm({ ...form, equipmentManagerName: e.target.value })} />
       </div>
+      <div>
+        <Label>Preparador de Arqueros</Label>
+        <Input value={form.goalkeeperCoachName} onChange={(e) => setForm({ ...form, goalkeeperCoachName: e.target.value })} />
+      </div>
+      <div>
+        <Label>Coordinador</Label>
+        <Input value={form.coordinatorName} onChange={(e) => setForm({ ...form, coordinatorName: e.target.value })} />
+      </div>
       <div className="md:col-span-2">
         <Label>Otros</Label>
         <Input value={form.otherStaffNotes} onChange={(e) => setForm({ ...form, otherStaffNotes: e.target.value })} />
@@ -428,9 +446,16 @@ function MatchCard({
                   .join(" · ")}
               </p>
             )}
-            {(match.coachName || match.physicalTrainerName || match.kineName || match.equipmentManagerName) && (
+            {(match.coachName || match.physicalTrainerName || match.kineName || match.equipmentManagerName || match.goalkeeperCoachName || match.coordinatorName) && (
               <p className="mt-1 text-[11px] text-gris">
-                {[match.coachName && `DT: ${match.coachName}`, match.physicalTrainerName && `PF: ${match.physicalTrainerName}`, match.kineName && `Kine: ${match.kineName}`, match.equipmentManagerName && `Utilero: ${match.equipmentManagerName}`]
+                {[
+                  match.coachName && `DT: ${match.coachName}`,
+                  match.physicalTrainerName && `PF: ${match.physicalTrainerName}`,
+                  match.kineName && `Kine: ${match.kineName}`,
+                  match.equipmentManagerName && `Utilero: ${match.equipmentManagerName}`,
+                  match.goalkeeperCoachName && `Prep. Arqueros: ${match.goalkeeperCoachName}`,
+                  match.coordinatorName && `Coordinador: ${match.coordinatorName}`,
+                ]
                   .filter(Boolean)
                   .join(" · ")}
               </p>

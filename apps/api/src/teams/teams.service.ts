@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import type { CreateTeamDto } from "@futboljoven/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
+import type { AuthenticatedUser } from "../auth/auth.types";
 
 @Injectable()
 export class TeamsService {
@@ -10,9 +11,18 @@ export class TeamsService {
     private audit: AuditService,
   ) {}
 
-  findAll(seasonId?: string) {
+  /**
+   * A user with team assignments (typically a coach responsible for only
+   * some categories) only sees those teams here — otherwise every list,
+   * filter and navigation menu built from this endpoint shows every
+   * category in the club regardless of what they can actually do with it.
+   * A user with no assignments (admin/director/coordinator personas) sees
+   * every team, same as before.
+   */
+  findAll(user: AuthenticatedUser, seasonId?: string) {
+    const scoped = user.teamIds.length > 0 ? { id: { in: user.teamIds } } : {};
     return this.prisma.team.findMany({
-      where: seasonId ? { seasonId } : undefined,
+      where: { ...scoped, ...(seasonId ? { seasonId } : {}) },
       include: { category: true, season: true, _count: { select: { players: true } } },
       orderBy: [{ season: { startDate: "desc" } }, { category: { order: "asc" } }],
     });

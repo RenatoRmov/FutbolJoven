@@ -11,8 +11,8 @@ export class TeamsController {
   constructor(private teamsService: TeamsService) {}
 
   @Get()
-  findAll(@Query("seasonId") seasonId?: string) {
-    return this.teamsService.findAll(seasonId);
+  findAll(@CurrentUser() user: AuthenticatedUser, @Query("seasonId") seasonId?: string) {
+    return this.teamsService.findAll(user, seasonId);
   }
 
   @Get(":id")

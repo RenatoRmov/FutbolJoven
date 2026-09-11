@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import type { CreateCategoryDto } from "@futboljoven/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
+import type { AuthenticatedUser } from "../auth/auth.types";
 
 @Injectable()
 export class CategoriesService {
@@ -10,7 +11,21 @@ export class CategoriesService {
     private audit: AuditService,
   ) {}
 
-  findAll(includeInactive = false) {
+  /**
+   * Same scoping rationale as TeamsService.findAll — a user restricted to
+   * specific teams (a coach) only sees the categories those teams belong
+   * to, so category filters/menus built from this endpoint never dangle
+   * links to categories they have no actual access to.
+   */
+  async findAll(user: AuthenticatedUser, includeInactive = false) {
+    if (user.teamIds.length > 0) {
+      const teams = await this.prisma.team.findMany({ where: { id: { in: user.teamIds } }, select: { categoryId: true } });
+      const categoryIds = [...new Set(teams.map((t) => t.categoryId))];
+      return this.prisma.category.findMany({
+        where: { id: { in: categoryIds }, ...(includeInactive ? {} : { isActive: true }) },
+        orderBy: { order: "asc" },
+      });
+    }
     return this.prisma.category.findMany({
       where: includeInactive ? {} : { isActive: true },
       orderBy: { order: "asc" },

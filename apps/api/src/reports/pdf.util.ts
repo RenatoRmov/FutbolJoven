@@ -261,6 +261,66 @@ export function drawMiniTable(doc: PDFKit.PDFDocument, x: number, y: number, wid
   return rowY;
 }
 
+export interface TableColumn {
+  key: string;
+  header: string;
+  width: number;
+  align?: "left" | "center" | "right";
+}
+
+/**
+ * Full-width, page-break-aware table with real per-column boundaries.
+ * Never build a table by space-padding a single text string — in a
+ * proportional font (this whole document), padded spaces don't have a
+ * fixed width, so columns drift out of alignment as soon as any cell's
+ * content differs in length from its neighbors. Returns the y below the table.
+ */
+export function drawTable(doc: PDFKit.PDFDocument, columns: TableColumn[], rows: Record<string, string>[], x: number = PAGE_MARGIN, fontSize = 8): number {
+  const padX = 4;
+  const padY = 4;
+  const tableWidth = columns.reduce((sum, c) => sum + c.width, 0);
+
+  function drawHeader() {
+    ensureSpace(doc, 20);
+    const y = doc.y;
+    doc.fontSize(fontSize).font("Helvetica-Bold").fillColor(COLORS.rojoOscuro);
+    let cx = x;
+    for (const col of columns) {
+      doc.text(col.header, cx + padX, y, { width: col.width - padX * 2, align: col.align ?? "left" });
+      cx += col.width;
+    }
+    const headerH = Math.max(...columns.map((col) => doc.heightOfString(col.header, { width: col.width - padX * 2 }))) + padY * 2;
+    doc.y = y + headerH;
+    doc.strokeColor(COLORS.borde).lineWidth(0.75).moveTo(x, doc.y - 2).lineTo(x + tableWidth, doc.y - 2).stroke();
+    doc.font("Helvetica").fillColor(COLORS.carbon);
+  }
+
+  drawHeader();
+
+  for (const row of rows) {
+    doc.fontSize(fontSize).font("Helvetica");
+    const heights = columns.map((col) => doc.heightOfString(row[col.key] ?? "", { width: col.width - padX * 2 }));
+    const rowHeight = Math.max(...heights) + padY * 2;
+
+    if (doc.y + rowHeight > PAGE_HEIGHT - PAGE_MARGIN - 90) {
+      doc.addPage();
+      drawHeader();
+    }
+
+    const y = doc.y;
+    let cx = x;
+    doc.fontSize(fontSize).font("Helvetica").fillColor(COLORS.carbon);
+    for (const col of columns) {
+      doc.text(row[col.key] ?? "", cx + padX, y, { width: col.width - padX * 2, align: col.align ?? "left" });
+      cx += col.width;
+    }
+    doc.y = y + rowHeight;
+    doc.strokeColor(COLORS.borde).lineWidth(0.5).moveTo(x, doc.y - 1).lineTo(x + tableWidth, doc.y - 1).stroke();
+  }
+
+  return doc.y;
+}
+
 /** Section title at an explicit position, for column layouts. Returns the y below the title. */
 export function columnSectionTitle(doc: PDFKit.PDFDocument, text: string, x: number, y: number, width: number): number {
   doc.fillColor(COLORS.rojoOscuro).fontSize(11).font("Helvetica-Bold");

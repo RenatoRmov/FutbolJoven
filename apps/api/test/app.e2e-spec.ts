@@ -936,4 +936,62 @@ describe("FutbolJoven API (e2e)", () => {
       expect(res.status).toBe(403);
     });
   });
+
+  describe("Fase 6d — categorías por profesor, campos nuevos de partido, export de fixture por fecha", () => {
+    it("lets an admin see every team and category", async () => {
+      const teamsRes = await request(app.getHttpServer()).get("/api/teams").set("Cookie", adminCookie);
+      expect(teamsRes.status).toBe(200);
+      const teamIds = teamsRes.body.map((t: any) => t.id);
+      expect(teamIds).toContain(teamAId);
+      expect(teamIds).toContain(teamBId);
+
+      const catsRes = await request(app.getHttpServer()).get("/api/categories").set("Cookie", adminCookie);
+      expect(catsRes.status).toBe(200);
+      expect(catsRes.body.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("restricts a coach with only one assigned team to that team's category, in both /teams and /categories", async () => {
+      const teamsRes = await request(app.getHttpServer()).get("/api/teams").set("Cookie", coachCookie);
+      expect(teamsRes.status).toBe(200);
+      const teamIds = teamsRes.body.map((t: any) => t.id);
+      expect(teamIds).toContain(teamAId);
+      expect(teamIds).not.toContain(teamBId);
+
+      const catsRes = await request(app.getHttpServer()).get("/api/categories").set("Cookie", coachCookie);
+      expect(catsRes.status).toBe(200);
+      const catIds = catsRes.body.map((c: any) => c.id);
+      expect(catIds).toEqual([categoryAId]);
+    });
+
+    it("stores the new Preparador de Arqueros and Coordinador fields on a match", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/api/fixtures")
+        .set("Cookie", coachCookie)
+        .send({ teamId: teamAId, opponent: "Rival Staff", date: "2026-11-01", goalkeeperCoachName: "Pedro Arquero", coordinatorName: "Ana Coordinadora" });
+      expect(res.status).toBe(201);
+      expect(res.body.goalkeeperCoachName).toBe("Pedro Arquero");
+      expect(res.body.coordinatorName).toBe("Ana Coordinadora");
+    });
+
+    it("exports every match across every category within a date range to xlsx", async () => {
+      const res = await request(app.getHttpServer())
+        .get("/api/export/fixtures?startDate=2026-01-01&endDate=2026-12-31")
+        .set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toContain("spreadsheetml");
+    });
+
+    it("rejects a fixture export with an invalid date range", async () => {
+      const res = await request(app.getHttpServer()).get("/api/export/fixtures?startDate=not-a-date&endDate=2026-12-31").set("Cookie", adminCookie);
+      expect(res.status).toBe(400);
+    });
+
+    it("lets a coach export the fixture range too, scoped to their own assigned team", async () => {
+      const res = await request(app.getHttpServer())
+        .get("/api/export/fixtures?startDate=2026-01-01&endDate=2026-12-31")
+        .set("Cookie", coachCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toContain("spreadsheetml");
+    });
+  });
 });

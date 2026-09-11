@@ -2,10 +2,11 @@ import { BadRequestException, Injectable } from "@nestjs/common";
 import * as ExcelJS from "exceljs";
 import { importPlayerRowSchema, PLAYER_IMPORT_COLUMNS } from "@futboljoven/shared";
 import type { ImportConfirmResponse, ImportPreviewResponse, ImportRowResult } from "@futboljoven/shared";
-import { EVALUATION_TYPES, TALENT_STATUS_LABELS } from "@futboljoven/shared";
+import { EVALUATION_TYPES, MATCH_STATUS_LABELS, PERMISSIONS, TALENT_STATUS_LABELS } from "@futboljoven/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { PlayersService } from "../players/players.service";
 import { EvaluationsService } from "../evaluations/evaluations.service";
+import { resolveTeamScope } from "../common/scope.util";
 import type { AuthenticatedUser } from "../auth/auth.types";
 import type { PlayerFilters } from "../players/players.service";
 
@@ -451,6 +452,75 @@ export class ImportExportService {
         condition: item.condition ?? "",
         category: item.category?.name ?? "General (todo el club)",
         observations: item.observations ?? "",
+      });
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  /** Every match across every category/team the user can see, in one date range — for a club-wide fixture export, not scoped to a single team like the PDF exports. */
+  async exportFixtures(user: AuthenticatedUser, filters: { startDate: string; endDate: string }): Promise<Buffer> {
+    const startDate = new Date(filters.startDate);
+    const endDate = new Date(filters.endDate);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      throw new BadRequestException("Se requiere un rango de fechas válido (startDate y endDate)");
+    }
+    const scope = resolveTeamScope(user, PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED);
+    endDate.setHours(23, 59, 59, 999);
+
+    const matches = await this.prisma.match.findMany({
+      where: {
+        ...(scope.teamIdIn ? { teamId: { in: scope.teamIdIn } } : {}),
+        date: { gte: startDate, lte: endDate },
+      },
+      include: { team: { select: { name: true, category: { select: { name: true } } } } },
+      orderBy: [{ date: "asc" }, { team: { category: { order: "asc" } } }],
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Fixture");
+    sheet.columns = [
+      { header: "Fecha", key: "date", width: 12 },
+      { header: "Categoría", key: "category", width: 16 },
+      { header: "Equipo", key: "team", width: 18 },
+      { header: "Rival", key: "opponent", width: 24 },
+      { header: "Condición", key: "isHome", width: 10 },
+      { header: "Resultado", key: "result", width: 12 },
+      { header: "Estado", key: "status", width: 14 },
+      { header: "Hora citación", key: "meetingTime", width: 12 },
+      { header: "Hora partido", key: "kickoffTime", width: 12 },
+      { header: "Ciudad", key: "city", width: 16 },
+      { header: "Estadio", key: "venue", width: 20 },
+      { header: "Entrenador", key: "coachName", width: 20 },
+      { header: "Preparador físico", key: "physicalTrainerName", width: 20 },
+      { header: "Preparador de Arqueros", key: "goalkeeperCoachName", width: 20 },
+      { header: "Kinesiólogo", key: "kineName", width: 20 },
+      { header: "Utilero", key: "equipmentManagerName", width: 20 },
+      { header: "Coordinador", key: "coordinatorName", width: 20 },
+      { header: "Otros", key: "otherStaffNotes", width: 24 },
+    ];
+    sheet.getRow(1).font = { bold: true };
+    for (const m of matches) {
+      sheet.addRow({
+        date: new Date(m.date).toISOString().slice(0, 10),
+        category: m.team.category?.name ?? "",
+        team: m.team.name,
+        opponent: m.opponent,
+        isHome: m.isHome ? "Local" : "Visita",
+        result: m.status === "PLAYED" ? `${m.teamScore ?? "-"} - ${m.opponentScore ?? "-"}` : "",
+        status: MATCH_STATUS_LABELS[m.status as keyof typeof MATCH_STATUS_LABELS] ?? m.status,
+        meetingTime: m.meetingTime ?? "",
+        kickoffTime: m.kickoffTime ?? "",
+        city: m.city ?? "",
+        venue: m.venue ?? "",
+        coachName: m.coachName ?? "",
+        physicalTrainerName: m.physicalTrainerName ?? "",
+        goalkeeperCoachName: m.goalkeeperCoachName ?? "",
+        kineName: m.kineName ?? "",
+        equipmentManagerName: m.equipmentManagerName ?? "",
+        coordinatorName: m.coordinatorName ?? "",
+        otherStaffNotes: m.otherStaffNotes ?? "",
       });
     }
 

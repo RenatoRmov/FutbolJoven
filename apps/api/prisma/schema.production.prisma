@@ -113,6 +113,8 @@ model Match {
   physicalTrainerName  String?
   kineName             String?
   equipmentManagerName String? // utilero
+  goalkeeperCoachName  String? // preparador de arqueros
+  coordinatorName      String? // coordinador
   otherStaffNotes      String?
 
   // Traslados / alojamiento — solo aplican cuando isHome = false (partido de visita).
