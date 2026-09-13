@@ -427,15 +427,17 @@ export class ReportsService {
           ["sprint30m", "30m (s)"],
           ["vift", "VIFT (km/h)"],
         ] as const;
-        doc.fontSize(8).fillColor(COLORS.rojoOscuro).font("Helvetica-Bold");
-        fullWidthText(doc, `Fecha        ${cols.map(([, label]) => label).join("   ")}`);
-        doc.font("Helvetica");
-        for (const r of parsed) {
-          ensureSpace(doc, 14);
-          const row = cols.map(([key]) => (r.metrics[key] !== undefined ? String(r.metrics[key]) : "—"));
-          doc.fontSize(8).fillColor(COLORS.carbon);
-          fullWidthText(doc, `${formatDate(r.date)}   ${row.join("      ")}`);
-        }
+        drawTable(
+          doc,
+          [
+            { key: "date", header: "Fecha", width: 62 },
+            ...cols.map(([key, label]) => ({ key, header: label, width: 64, align: "center" as const })),
+          ],
+          parsed.map((r) => ({
+            date: formatDate(r.date),
+            ...Object.fromEntries(cols.map(([key]) => [key, r.metrics[key] !== undefined ? String(r.metrics[key]) : "—"])),
+          })),
+        );
 
         const latest = parsed[parsed.length - 1].metrics;
         if (latest.vift !== undefined || latest.cmj !== undefined) {
@@ -507,17 +509,27 @@ export class ReportsService {
         doc.fontSize(9).fillColor(COLORS.gris);
         fullWidthText(doc, "Sin revisiones de peso registradas.");
       } else {
-        doc.fontSize(8).fillColor(COLORS.rojoOscuro).font("Helvetica-Bold");
-        fullWidthText(doc, "Fecha        Peso        Talla        Edad        IMC        Clasificación        Registró");
-        doc.font("Helvetica");
-        for (const r of parsed) {
-          ensureSpace(doc, 14);
-          doc.fontSize(8).fillColor(COLORS.carbon);
-          fullWidthText(
-            doc,
-            `${formatDate(r.date)}   ${r.metrics.weight !== undefined ? `${r.metrics.weight}kg` : "—"}      ${r.metrics.height !== undefined ? `${r.metrics.height}cm` : "—"}      ${r.metrics.age !== undefined ? r.metrics.age : "—"}      ${r.imc !== null ? r.imc : "—"}      ${r.clasificacion}      ${r.recordedBy.firstName} ${r.recordedBy.lastName}`,
-          );
-        }
+        drawTable(
+          doc,
+          [
+            { key: "date", header: "Fecha", width: 62 },
+            { key: "weight", header: "Peso", width: 48, align: "center" },
+            { key: "height", header: "Talla", width: 48, align: "center" },
+            { key: "age", header: "Edad", width: 42, align: "center" },
+            { key: "imc", header: "IMC", width: 42, align: "center" },
+            { key: "clasificacion", header: "Clasificación", width: 100 },
+            { key: "recordedBy", header: "Registró", width: 120 },
+          ],
+          parsed.map((r) => ({
+            date: formatDate(r.date),
+            weight: r.metrics.weight !== undefined ? `${r.metrics.weight}kg` : "—",
+            height: r.metrics.height !== undefined ? `${r.metrics.height}cm` : "—",
+            age: r.metrics.age !== undefined ? String(r.metrics.age) : "—",
+            imc: r.imc !== null ? String(r.imc) : "—",
+            clasificacion: r.clasificacion,
+            recordedBy: `${r.recordedBy.firstName} ${r.recordedBy.lastName}`,
+          })),
+        );
       }
 
       addSignatureBlock(doc);
@@ -567,18 +579,23 @@ export class ReportsService {
         doc.fontSize(9).fillColor(COLORS.gris);
         fullWidthText(doc, "Sin partidos cargados.");
       } else {
-        doc.fontSize(8).fillColor(COLORS.rojoOscuro).font("Helvetica-Bold");
-        fullWidthText(doc, "Fecha        Rival                            Cond.    Resultado    Estado");
-        doc.font("Helvetica");
-        for (const m of matches) {
-          ensureSpace(doc, 14);
-          const scoreLine = m.status === "PLAYED" ? `${m.teamScore ?? "-"} - ${m.opponentScore ?? "-"}` : "—";
-          doc.fontSize(8).fillColor(COLORS.carbon);
-          fullWidthText(
-            doc,
-            `${formatDate(m.date)}   ${m.opponent.padEnd(28).slice(0, 28)}   ${m.isHome ? "Local " : "Visita"}   ${scoreLine.padEnd(10)}   ${MATCH_STATUS_LABELS[m.status as keyof typeof MATCH_STATUS_LABELS] ?? m.status}`,
-          );
-        }
+        drawTable(
+          doc,
+          [
+            { key: "date", header: "Fecha", width: 65 },
+            { key: "opponent", header: "Rival", width: 175 },
+            { key: "isHome", header: "Cond.", width: 60, align: "center" },
+            { key: "score", header: "Resultado", width: 75, align: "center" },
+            { key: "status", header: "Estado", width: 95, align: "center" },
+          ],
+          matches.map((m) => ({
+            date: formatDate(m.date),
+            opponent: m.opponent,
+            isHome: m.isHome ? "Local" : "Visita",
+            score: m.status === "PLAYED" ? `${m.teamScore ?? "-"} - ${m.opponentScore ?? "-"}` : "—",
+            status: MATCH_STATUS_LABELS[m.status as keyof typeof MATCH_STATUS_LABELS] ?? m.status,
+          })),
+        );
       }
 
       for (const match of matches) {
@@ -711,18 +728,21 @@ export class ReportsService {
         doc.fontSize(9).fillColor(COLORS.gris);
         fullWidthText(doc, "Sin movimientos registrados.");
       } else {
-        doc.fontSize(8).fillColor(COLORS.rojoOscuro).font("Helvetica-Bold");
-        fullWidthText(doc, "Mes                     Ingresos          Gastos            Balance");
-        doc.font("Helvetica");
-        for (const m of summary.byMonth) {
-          ensureSpace(doc, 14);
-          const label = new Date(`${m.month}-01`).toLocaleDateString("es-CL", { month: "long", year: "numeric", timeZone: "UTC" });
-          doc.fontSize(8).fillColor(COLORS.carbon);
-          fullWidthText(
-            doc,
-            `${label.padEnd(23).slice(0, 23)}  ${formatCLP(m.income).padEnd(16)}  ${formatCLP(m.expense).padEnd(16)}  ${formatCLP(m.balance)}`,
-          );
-        }
+        drawTable(
+          doc,
+          [
+            { key: "month", header: "Mes", width: 170 },
+            { key: "income", header: "Ingresos", width: 110, align: "right" },
+            { key: "expense", header: "Gastos", width: 110, align: "right" },
+            { key: "balance", header: "Balance", width: 110, align: "right" },
+          ],
+          summary.byMonth.map((m) => ({
+            month: new Date(`${m.month}-01`).toLocaleDateString("es-CL", { month: "long", year: "numeric", timeZone: "UTC" }),
+            income: formatCLP(m.income),
+            expense: formatCLP(m.expense),
+            balance: formatCLP(m.balance),
+          })),
+        );
       }
 
       addSignatureBlock(doc);
