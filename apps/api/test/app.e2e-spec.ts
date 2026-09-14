@@ -25,6 +25,8 @@ describe("FutbolJoven API (e2e)", () => {
   let coachCookie: string;
   let nutritionistCookie: string;
   let physicalTrainerCookie: string;
+  let adminId: string;
+  let coachId: string;
 
   let teamAId: string;
   let teamBId: string;
@@ -185,10 +187,12 @@ describe("FutbolJoven API (e2e)", () => {
       expect(res.status).toBe(200);
       expect(res.headers["set-cookie"]).toBeDefined();
       adminCookie = extractCookie(res);
+      adminId = res.body.id;
 
       const coachRes = await request(app.getHttpServer()).post("/api/auth/login").send({ email: "coach@test.local", password: "Test1234!" });
       expect(coachRes.status).toBe(200);
       coachCookie = extractCookie(coachRes);
+      coachId = coachRes.body.id;
 
       const nutritionRes = await request(app.getHttpServer()).post("/api/auth/login").send({ email: "nutrition@test.local", password: "Test1234!" });
       expect(nutritionRes.status).toBe(200);
@@ -992,6 +996,71 @@ describe("FutbolJoven API (e2e)", () => {
         .set("Cookie", coachCookie);
       expect(res.status).toBe(200);
       expect(res.headers["content-type"]).toContain("spreadsheetml");
+    });
+  });
+
+  describe("Fase 7 — filtros de export por categoría/condición, eliminar usuarios, minutos jugados", () => {
+    it("accepts a fixture export filtered by categoryIds", async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/export/fixtures?startDate=2026-01-01&endDate=2026-12-31&categoryIds=${categoryAId}`)
+        .set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toContain("spreadsheetml");
+    });
+
+    it("accepts a fixture export filtered by condición (isHome)", async () => {
+      const awayRes = await request(app.getHttpServer())
+        .post("/api/fixtures")
+        .set("Cookie", adminCookie)
+        .send({ teamId: teamAId, opponent: "Rival Visita Filtro", date: "2026-11-10", isHome: false });
+      expect(awayRes.status).toBe(201);
+
+      const res = await request(app.getHttpServer())
+        .get("/api/export/fixtures?startDate=2026-01-01&endDate=2026-12-31&isHome=false")
+        .set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toContain("spreadsheetml");
+    });
+
+    it("generates the minutes-played PDF for a team", async () => {
+      const res = await request(app.getHttpServer()).get(`/api/reports/teams/${teamAId}/minutes-pdf`).set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toContain("application/pdf");
+    });
+
+    it("blocks a coach from the minutes-played PDF of a team they aren't assigned to", async () => {
+      const res = await request(app.getHttpServer()).get(`/api/reports/teams/${teamBId}/minutes-pdf`).set("Cookie", coachCookie);
+      expect(res.status).toBe(403);
+    });
+
+    it("lets an admin permanently delete a user with no history", async () => {
+      const rolesRes = await request(app.getHttpServer()).get("/api/roles").set("Cookie", adminCookie);
+      const roleId = rolesRes.body[0].id;
+      const createRes = await request(app.getHttpServer())
+        .post("/api/users")
+        .set("Cookie", adminCookie)
+        .send({ email: "throwaway@test.local", password: "Test1234!", firstName: "Throw", lastName: "Away", roleId });
+      expect(createRes.status).toBe(201);
+
+      const deleteRes = await request(app.getHttpServer()).delete(`/api/users/${createRes.body.id}`).set("Cookie", adminCookie);
+      expect(deleteRes.status).toBe(200);
+
+      const getRes = await request(app.getHttpServer()).get(`/api/users/${createRes.body.id}`).set("Cookie", adminCookie);
+      expect(getRes.status).toBe(404);
+    });
+
+    it("blocks an admin from deleting their own user", async () => {
+      const res = await request(app.getHttpServer()).delete(`/api/users/${adminId}`).set("Cookie", adminCookie);
+      expect(res.status).toBe(400);
+    });
+
+    it("blocks deleting a user who has associated history (evaluations), with a friendly message", async () => {
+      const res = await request(app.getHttpServer()).delete(`/api/users/${coachId}`).set("Cookie", adminCookie);
+      expect(res.status).toBe(409);
+      expect(res.body.message).toContain("Desactivalo");
+
+      const getRes = await request(app.getHttpServer()).get(`/api/users/${coachId}`).set("Cookie", adminCookie);
+      expect(getRes.status).toBe(200);
     });
   });
 });

@@ -460,7 +460,10 @@ export class ImportExportService {
   }
 
   /** Every match across every category/team the user can see, in one date range — for a club-wide fixture export, not scoped to a single team like the PDF exports. */
-  async exportFixtures(user: AuthenticatedUser, filters: { startDate: string; endDate: string }): Promise<Buffer> {
+  async exportFixtures(
+    user: AuthenticatedUser,
+    filters: { startDate: string; endDate: string; categoryIds?: string[]; isHome?: boolean },
+  ): Promise<Buffer> {
     const startDate = new Date(filters.startDate);
     const endDate = new Date(filters.endDate);
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
@@ -473,6 +476,8 @@ export class ImportExportService {
       where: {
         ...(scope.teamIdIn ? { teamId: { in: scope.teamIdIn } } : {}),
         date: { gte: startDate, lte: endDate },
+        ...(filters.categoryIds && filters.categoryIds.length > 0 ? { team: { categoryId: { in: filters.categoryIds } } } : {}),
+        ...(filters.isHome !== undefined ? { isHome: filters.isHome } : {}),
       },
       include: { team: { select: { name: true, category: { select: { name: true } } } } },
       orderBy: [{ date: "asc" }, { team: { category: { order: "asc" } } }],

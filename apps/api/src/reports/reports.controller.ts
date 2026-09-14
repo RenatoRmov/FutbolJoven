@@ -60,6 +60,13 @@ export class ReportsController {
     sendPdf(res, buffer, `fixture-${id}.pdf`);
   }
 
+  @RequirePermission(PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED)
+  @Get("teams/:id/minutes-pdf")
+  async minutesPdf(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Res() res: Response) {
+    const buffer = await this.reportsService.buildMinutesReportPdf(user, id);
+    sendPdf(res, buffer, `minutos-jugados-${id}.pdf`);
+  }
+
   @RequirePermission(PERMISSIONS.FINANCE_VIEW, PERMISSIONS.FINANCE_MANAGE)
   @Get("finance/pdf")
   async financePdf(@Res() res: Response) {

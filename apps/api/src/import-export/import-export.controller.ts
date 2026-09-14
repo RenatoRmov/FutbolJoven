@@ -85,8 +85,15 @@ export class ImportExportController {
     @Res() res: Response,
     @Query("startDate") startDate: string,
     @Query("endDate") endDate: string,
+    @Query("categoryIds") categoryIds?: string,
+    @Query("isHome") isHome?: string,
   ) {
-    const buffer = await this.importExportService.exportFixtures(user, { startDate, endDate });
+    const buffer = await this.importExportService.exportFixtures(user, {
+      startDate,
+      endDate,
+      categoryIds: categoryIds ? categoryIds.split(",").filter(Boolean) : undefined,
+      isHome: isHome === "true" ? true : isHome === "false" ? false : undefined,
+    });
     sendXlsx(res, buffer, `fixture-${startDate}_a_${endDate}.xlsx`);
   }
 }

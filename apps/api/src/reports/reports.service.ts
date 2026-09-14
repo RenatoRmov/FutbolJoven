@@ -608,6 +608,86 @@ export class ReportsService {
     });
   }
 
+  /**
+   * Minutos jugados por jugador del plantel activo, sobre el total de partidos
+   * jugados por el equipo. Los "minutos posibles" de cada partido se toman como
+   * el máximo minutesPlayed registrado en ese partido (no un valor fijo de 90),
+   * porque la duración real varía por categoría/formato y no hay un campo de
+   * duración en el modelo Match. Se ordena de menor a mayor % jugado para que
+   * los jugadores con menos participación aparezcan primero — ese es el uso que
+   * le va a dar el cuerpo técnico a este reporte.
+   */
+  async buildMinutesReportPdf(user: AuthenticatedUser, teamId: string): Promise<Buffer> {
+    assertTeamInScope(user, teamId, PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED);
+    const team = await this.prisma.team.findUnique({ where: { id: teamId }, include: { category: true, season: true } });
+    if (!team) throw new NotFoundException("Equipo no encontrado");
+
+    const [players, matches] = await Promise.all([
+      this.prisma.player.findMany({ where: { currentTeamId: teamId, status: "ACTIVE" }, orderBy: [{ lastName: "asc" }, { firstName: "asc" }] }),
+      this.prisma.match.findMany({ where: { teamId, status: "PLAYED" }, include: { appearances: true }, orderBy: { date: "asc" } }),
+    ]);
+
+    let totalPossibleMinutes = 0;
+    const statsByPlayerId = new Map<string, { minutes: number; goals: number; yellow: number; red: number }>();
+    for (const p of players) statsByPlayerId.set(p.id, { minutes: 0, goals: 0, yellow: 0, red: 0 });
+
+    for (const match of matches) {
+      const matchMinutes = match.appearances.reduce((max, a) => Math.max(max, a.minutesPlayed ?? 0), 0);
+      totalPossibleMinutes += matchMinutes;
+      for (const a of match.appearances) {
+        const stats = statsByPlayerId.get(a.playerId);
+        if (!stats) continue; // ya no está en el plantel activo de este equipo
+        stats.minutes += a.minutesPlayed ?? 0;
+        stats.goals += a.goals;
+        stats.yellow += a.yellowCards;
+        if (a.redCard) stats.red += 1;
+      }
+    }
+
+    const rows = players
+      .map((p) => {
+        const s = statsByPlayerId.get(p.id)!;
+        const pct = totalPossibleMinutes > 0 ? (s.minutes / totalPossibleMinutes) * 100 : 0;
+        return { player: p, ...s, pct };
+      })
+      .sort((a, b) => a.pct - b.pct);
+
+    return renderPdfToBuffer((doc) => {
+      addHeader(doc, "Minutos jugados", `${team.name}${team.category ? ` — ${team.category.name}` : ""}${team.season ? ` · ${team.season.name}` : ""}`);
+
+      sectionTitle(doc, "Resumen");
+      doc.fontSize(9).fillColor(COLORS.gris);
+      fullWidthText(doc, `Partidos jugados: ${matches.length}    Minutos posibles: ${totalPossibleMinutes}`);
+
+      if (players.length === 0) {
+        doc.fontSize(9).fillColor(COLORS.gris);
+        fullWidthText(doc, "Sin jugadores activos en el plantel.");
+      } else {
+        drawTable(
+          doc,
+          [
+            { key: "player", header: "Jugador", width: 175 },
+            { key: "minutes", header: "Min. jugados", width: 80, align: "center" },
+            { key: "pct", header: "% Min.", width: 60, align: "center" },
+            { key: "goals", header: "Goles", width: 50, align: "center" },
+            { key: "yellow", header: "Amar.", width: 50, align: "center" },
+            { key: "red", header: "Roja", width: 45, align: "center" },
+          ],
+          rows.map((r) => ({
+            player: `${r.player.firstName} ${r.player.lastName}`,
+            minutes: String(r.minutes),
+            pct: totalPossibleMinutes > 0 ? `${r.pct.toFixed(0)}%` : "—",
+            goals: String(r.goals),
+            yellow: String(r.yellow),
+            red: String(r.red),
+          })),
+        );
+      }
+
+      addSignatureBlock(doc);
+    });
+  }
+
   /** Shared match-detail block used by both buildMatchReportPdf and buildFixtureReportPdf. */
   private drawMatchDetail(doc: PDFKit.PDFDocument, match: any, options: { includeRoster: boolean }) {
     sectionTitle(doc, "Datos del partido");

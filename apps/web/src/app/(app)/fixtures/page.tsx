@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Input, Label } from "@/components/ui/Input";
+import { Input, Label, Select } from "@/components/ui/Input";
 import { Skeleton, EmptyState } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
 import { api } from "@/lib/api-client";
@@ -21,6 +21,8 @@ export default function FixturesHomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [startDate, setStartDate] = useState(firstDayOfMonth());
   const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
+  const [exportCategoryIds, setExportCategoryIds] = useState<string[]>([]);
+  const [exportCond, setExportCond] = useState<"ALL" | "HOME" | "AWAY">("ALL");
 
   useEffect(() => {
     Promise.all([api.get<Team[]>("/teams"), api.get<Category[]>("/categories")]).then(([t, c]) => {
@@ -39,6 +41,17 @@ export default function FixturesHomePage() {
     return map;
   }, [teams]);
 
+  function toggleExportCategory(id: string) {
+    setExportCategoryIds((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
+  }
+
+  function handleExportFixtures() {
+    const params = new URLSearchParams({ startDate, endDate });
+    if (exportCategoryIds.length > 0) params.set("categoryIds", exportCategoryIds.join(","));
+    if (exportCond !== "ALL") params.set("isHome", exportCond === "HOME" ? "true" : "false");
+    api.download(`/export/fixtures?${params.toString()}`, `fixture-${startDate}_a_${endDate}.xlsx`);
+  }
+
   return (
     <div>
       <Header title="Fixture" />
@@ -49,21 +62,43 @@ export default function FixturesHomePage() {
           <CardHeader>
             <CardTitle>Exportar fixture por rango de fechas</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-wrap items-end gap-3">
-            <div>
-              <Label>Fecha inicio</Label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <Label>Fecha inicio</Label>
+                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </div>
+              <div>
+                <Label>Fecha término</Label>
+                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
+              <div>
+                <Label>Condición</Label>
+                <Select value={exportCond} onChange={(e) => setExportCond(e.target.value as "ALL" | "HOME" | "AWAY")} className="w-32">
+                  <option value="ALL">Todas</option>
+                  <option value="HOME">Local</option>
+                  <option value="AWAY">Visita</option>
+                </Select>
+              </div>
+              <Button variant="secondary" onClick={handleExportFixtures}>
+                Exportar Excel
+              </Button>
             </div>
             <div>
-              <Label>Fecha término</Label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <Label>Categorías (ninguna seleccionada = todas)</Label>
+              <div className="flex flex-wrap gap-2">
+                {categories.map((c) => {
+                  const active = exportCategoryIds.includes(c.id);
+                  return (
+                    <button type="button" key={c.id} onClick={() => toggleExportCategory(c.id)}>
+                      <Badge tone={active ? "success" : "neutral"} className="cursor-pointer">
+                        {c.name}
+                      </Badge>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <Button
-              variant="secondary"
-              onClick={() => api.download(`/export/fixtures?startDate=${startDate}&endDate=${endDate}`, `fixture-${startDate}_a_${endDate}.xlsx`)}
-            >
-              Exportar Excel (todas las categorías)
-            </Button>
           </CardContent>
         </Card>
 
@@ -82,8 +117,18 @@ export default function FixturesHomePage() {
           .sort((a, b) => a.order - b.order)
           .map((category) => (
             <Card key={category.id}>
-              <CardHeader>
+              <CardHeader className="flex items-center justify-between">
                 <CardTitle>{category.name}</CardTitle>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    const team = byCategory.get(category.id)![0];
+                    api.download(`/reports/teams/${team.id}/minutes-pdf`, `minutos-jugados-${category.name}.pdf`);
+                  }}
+                >
+                  Exportar minutos jugados
+                </Button>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
                 {byCategory.get(category.id)!.map((team) => (

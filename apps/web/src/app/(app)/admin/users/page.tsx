@@ -66,6 +66,17 @@ export default function UsersAdminPage() {
     load();
   }
 
+  async function handleDelete(u: UserRow) {
+    if (!confirm(`¿Eliminar permanentemente a ${u.firstName} ${u.lastName}? Esta acción no se puede deshacer.`)) return;
+    setError(null);
+    try {
+      await api.delete(`/users/${u.id}`);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo eliminar el usuario");
+    }
+  }
+
   return (
     <div>
       <Header title="Usuarios" />
@@ -134,6 +145,8 @@ export default function UsersAdminPage() {
           </CardContent>
         </Card>
 
+        {error && <p className="text-sm text-rojo-oscuro">{error}</p>}
+
         <Table>
           <Thead>
             <Tr>
@@ -155,9 +168,12 @@ export default function UsersAdminPage() {
                 <Td>{u.role.name}</Td>
                 <Td>{u.teamAssignments.map((a) => a.team.name).join(", ") || "—"}</Td>
                 <Td>{u.isActive ? <Badge tone="success">Activo</Badge> : <Badge tone="neutral">Inactivo</Badge>}</Td>
-                <Td>
+                <Td className="flex gap-2">
                   <Button size="sm" variant="secondary" onClick={() => toggleActive(u)}>
                     {u.isActive ? "Desactivar" : "Activar"}
+                  </Button>
+                  <Button size="sm" variant="danger" onClick={() => handleDelete(u)}>
+                    Eliminar
                   </Button>
                 </Td>
               </Tr>
