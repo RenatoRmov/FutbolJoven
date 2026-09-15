@@ -1,8 +1,8 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { computeNotaFinalForType, computeTalentStatus, MATCH_STATUS_LABELS, PERMISSIONS, PLAYER_POSITION_LABELS, TALENT_STATUS_LABELS } from "@futboljoven/shared";
 import type { TalentStatus } from "@futboljoven/shared";
 import { PrismaService } from "../prisma/prisma.service";
-import { assertTeamInScope } from "../common/scope.util";
+import { assertTeamInScope, resolveTeamScope } from "../common/scope.util";
 import { EvaluationsService } from "../evaluations/evaluations.service";
 import { FinanceService } from "../finance/finance.service";
 import type { AuthenticatedUser } from "../auth/auth.types";
@@ -602,6 +602,70 @@ export class ReportsService {
         doc.addPage();
         addHeader(doc, `${match.isHome ? "vs" : "@"} ${match.opponent}`, formatDate(match.date));
         this.drawMatchDetail(doc, match, { includeRoster: false });
+      }
+
+      addSignatureBlock(doc);
+    });
+  }
+
+  /**
+   * Fixture por rango de fechas a través de todas las categorías/equipos que
+   * el usuario puede ver — la versión PDF del export a Excel homónimo
+   * (ImportExportService.exportFixtures), con los mismos filtros de
+   * categorías y condición.
+   */
+  async buildFixtureRangeReportPdf(
+    user: AuthenticatedUser,
+    filters: { startDate: string; endDate: string; categoryIds?: string[]; isHome?: boolean },
+  ): Promise<Buffer> {
+    const startDate = new Date(filters.startDate);
+    const endDate = new Date(filters.endDate);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      throw new BadRequestException("Se requiere un rango de fechas válido (startDate y endDate)");
+    }
+    const scope = resolveTeamScope(user, PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED);
+    endDate.setHours(23, 59, 59, 999);
+
+    const matches = await this.prisma.match.findMany({
+      where: {
+        ...(scope.teamIdIn ? { teamId: { in: scope.teamIdIn } } : {}),
+        date: { gte: startDate, lte: endDate },
+        ...(filters.categoryIds && filters.categoryIds.length > 0 ? { team: { categoryId: { in: filters.categoryIds } } } : {}),
+        ...(filters.isHome !== undefined ? { isHome: filters.isHome } : {}),
+      },
+      include: { team: { select: { name: true, category: { select: { name: true } } } } },
+      orderBy: [{ date: "asc" }, { team: { category: { order: "asc" } } }],
+    });
+
+    return renderPdfToBuffer((doc) => {
+      addHeader(doc, "Fixture por rango de fechas", `${formatDate(startDate)} — ${formatDate(endDate)}`);
+
+      sectionTitle(doc, "Resumen de partidos");
+      if (matches.length === 0) {
+        doc.fontSize(9).fillColor(COLORS.gris);
+        fullWidthText(doc, "Sin partidos en el rango seleccionado.");
+      } else {
+        drawTable(
+          doc,
+          [
+            { key: "date", header: "Fecha", width: 55 },
+            { key: "category", header: "Categoría", width: 75 },
+            { key: "team", header: "Equipo", width: 80 },
+            { key: "opponent", header: "Rival", width: 135 },
+            { key: "isHome", header: "Cond.", width: 55, align: "center" },
+            { key: "score", header: "Resultado", width: 60, align: "center" },
+            { key: "status", header: "Estado", width: 55, align: "center" },
+          ],
+          matches.map((m) => ({
+            date: formatDate(m.date),
+            category: m.team.category?.name ?? "—",
+            team: m.team.name,
+            opponent: m.opponent,
+            isHome: m.isHome ? "Local" : "Visita",
+            score: m.status === "PLAYED" ? `${m.teamScore ?? "-"} - ${m.opponentScore ?? "-"}` : "—",
+            status: MATCH_STATUS_LABELS[m.status as keyof typeof MATCH_STATUS_LABELS] ?? m.status,
+          })),
+        );
       }
 
       addSignatureBlock(doc);

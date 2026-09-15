@@ -1028,6 +1028,19 @@ describe("FutbolJoven API (e2e)", () => {
       expect(res.headers["content-type"]).toContain("application/pdf");
     });
 
+    it("generates the fixture-by-date-range PDF, filtered by category and condición", async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/reports/fixtures/pdf?startDate=2026-01-01&endDate=2026-12-31&categoryIds=${categoryAId}&isHome=true`)
+        .set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toContain("application/pdf");
+    });
+
+    it("rejects the fixture-by-date-range PDF with an invalid date range", async () => {
+      const res = await request(app.getHttpServer()).get("/api/reports/fixtures/pdf?startDate=not-a-date&endDate=2026-12-31").set("Cookie", adminCookie);
+      expect(res.status).toBe(400);
+    });
+
     it("blocks a coach from the minutes-played PDF of a team they aren't assigned to", async () => {
       const res = await request(app.getHttpServer()).get(`/api/reports/teams/${teamBId}/minutes-pdf`).set("Cookie", coachCookie);
       expect(res.status).toBe(403);

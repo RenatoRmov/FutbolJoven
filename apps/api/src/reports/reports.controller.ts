@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Res } from "@nestjs/common";
+import { Controller, Get, Param, Query, Res } from "@nestjs/common";
 import type { Response } from "express";
 import { PERMISSIONS } from "@futboljoven/shared";
 import { RequirePermission } from "../auth/decorators/require-permission.decorator";
@@ -51,6 +51,25 @@ export class ReportsController {
   async matchPdf(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Res() res: Response) {
     const buffer = await this.reportsService.buildMatchReportPdf(user, id);
     sendPdf(res, buffer, `partido-${id}.pdf`);
+  }
+
+  @RequirePermission(PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED)
+  @Get("fixtures/pdf")
+  async fixtureRangePdf(
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() res: Response,
+    @Query("startDate") startDate: string,
+    @Query("endDate") endDate: string,
+    @Query("categoryIds") categoryIds?: string,
+    @Query("isHome") isHome?: string,
+  ) {
+    const buffer = await this.reportsService.buildFixtureRangeReportPdf(user, {
+      startDate,
+      endDate,
+      categoryIds: categoryIds ? categoryIds.split(",").filter(Boolean) : undefined,
+      isHome: isHome === "true" ? true : isHome === "false" ? false : undefined,
+    });
+    sendPdf(res, buffer, `fixture-${startDate}_a_${endDate}.pdf`);
   }
 
   @RequirePermission(PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED)

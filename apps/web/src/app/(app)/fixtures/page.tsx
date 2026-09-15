@@ -45,11 +45,19 @@ export default function FixturesHomePage() {
     setExportCategoryIds((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
   }
 
-  function handleExportFixtures() {
+  function buildExportParams() {
     const params = new URLSearchParams({ startDate, endDate });
     if (exportCategoryIds.length > 0) params.set("categoryIds", exportCategoryIds.join(","));
     if (exportCond !== "ALL") params.set("isHome", exportCond === "HOME" ? "true" : "false");
-    api.download(`/export/fixtures?${params.toString()}`, `fixture-${startDate}_a_${endDate}.xlsx`);
+    return params;
+  }
+
+  function handleExportFixturesExcel() {
+    api.download(`/export/fixtures?${buildExportParams().toString()}`, `fixture-${startDate}_a_${endDate}.xlsx`);
+  }
+
+  function handleExportFixturesPdf() {
+    api.download(`/reports/fixtures/pdf?${buildExportParams().toString()}`, `fixture-${startDate}_a_${endDate}.pdf`);
   }
 
   return (
@@ -80,8 +88,11 @@ export default function FixturesHomePage() {
                   <option value="AWAY">Visita</option>
                 </Select>
               </div>
-              <Button variant="secondary" onClick={handleExportFixtures}>
+              <Button variant="secondary" onClick={handleExportFixturesExcel}>
                 Exportar Excel
+              </Button>
+              <Button variant="secondary" onClick={handleExportFixturesPdf}>
+                Exportar PDF
               </Button>
             </div>
             <div>
