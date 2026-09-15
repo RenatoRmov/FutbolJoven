@@ -611,9 +611,13 @@ export class ReportsService {
 
   /**
    * Fixture por rango de fechas a través de todas las categorías/equipos que
-   * el usuario puede ver — la versión PDF del export a Excel homónimo
-   * (ImportExportService.exportFixtures), con los mismos filtros de
-   * categorías y condición.
+   * el usuario puede ver, con los mismos filtros de categorías y condición
+   * que el export a Excel homónimo (ImportExportService.exportFixtures).
+   * A diferencia del Excel (una fila resumen por partido), acá se pide "toda
+   * la información" — página 1 con el resumen y una página de detalle por
+   * partido (igual contenido que el export individual/por equipo), sin la
+   * nómina de citados para no disparar el tamaño del archivo cuando el rango
+   * cruza muchas categorías.
    */
   async buildFixtureRangeReportPdf(
     user: AuthenticatedUser,
@@ -667,6 +671,16 @@ export class ReportsService {
             status: MATCH_STATUS_LABELS[m.status as keyof typeof MATCH_STATUS_LABELS] ?? m.status,
           })),
         );
+      }
+
+      for (const match of matches) {
+        doc.addPage();
+        addHeader(
+          doc,
+          `${match.isHome ? "vs" : "@"} ${match.opponent}`,
+          `${match.team.name}${match.team.category ? ` — ${match.team.category.name}` : ""} · ${formatDate(match.date)}`,
+        );
+        this.drawMatchDetail(doc, match, { includeRoster: false });
       }
 
       addSignatureBlock(doc);
