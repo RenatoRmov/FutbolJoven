@@ -76,6 +76,32 @@ export function fullWidthText(doc: PDFKit.PDFDocument, text: string, options: PD
   doc.text(text, PAGE_MARGIN, doc.y, { ...CONTENT_WIDTH_OPTS, ...options });
 }
 
+/**
+ * Label bold on the left, value regular on the right, in two fixed columns.
+ * Never build this as continued text (doc.text(label, {continued:true})
+ * followed by doc.text(value)) — when the value is long enough to wrap,
+ * pdfkit wraps the continuation back to the page margin instead of under
+ * the value column, so a wrapped name reads as a stray orphan line instead
+ * of a continuation of the same field.
+ */
+export function labelValueRow(doc: PDFKit.PDFDocument, label: string, value: string, labelWidth = 140) {
+  const x = PAGE_MARGIN;
+  const valueX = x + labelWidth;
+  const valueWidth = CONTENT_WIDTH_OPTS.width - labelWidth;
+
+  doc.fontSize(9).font("Helvetica-Bold");
+  const labelHeight = doc.heightOfString(label, { width: labelWidth });
+  doc.font("Helvetica");
+  const valueHeight = doc.heightOfString(value, { width: valueWidth });
+  const rowHeight = Math.max(labelHeight, valueHeight);
+
+  ensureSpace(doc, rowHeight + 4);
+  const y = doc.y;
+  doc.fontSize(9).font("Helvetica-Bold").fillColor(COLORS.gris).text(label, x, y, { width: labelWidth });
+  doc.font("Helvetica").fillColor(COLORS.carbon).text(value, valueX, y, { width: valueWidth });
+  doc.y = y + rowHeight + 4;
+}
+
 export function sectionTitle(doc: PDFKit.PDFDocument, text: string) {
   ensureSpace(doc, 30);
   doc.moveDown(0.5);

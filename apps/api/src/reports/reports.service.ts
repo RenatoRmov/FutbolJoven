@@ -20,6 +20,7 @@ import {
   ensureSpace,
   formatDate,
   fullWidthText,
+  labelValueRow,
   renderPdfToBuffer,
   sectionTitle,
   STATUS_COLORS,
@@ -769,10 +770,7 @@ export class ReportsService {
     }
     for (const [label, value] of infoRows) {
       if (!value) continue;
-      ensureSpace(doc, 14);
-      doc.fontSize(9).fillColor(COLORS.gris).font("Helvetica-Bold");
-      doc.text(label, PAGE_MARGIN, doc.y, { continued: true, width: 140 });
-      doc.font("Helvetica").fillColor(COLORS.carbon).text(`: ${value}`);
+      labelValueRow(doc, label, value);
     }
 
     sectionTitle(doc, "Cuerpo técnico");
@@ -792,10 +790,7 @@ export class ReportsService {
     } else {
       for (const [label, value] of staffRows) {
         if (!value) continue;
-        ensureSpace(doc, 14);
-        doc.fontSize(9).fillColor(COLORS.gris).font("Helvetica-Bold");
-        doc.text(label, PAGE_MARGIN, doc.y, { continued: true, width: 140 });
-        doc.font("Helvetica").fillColor(COLORS.carbon).text(`: ${value}`);
+        labelValueRow(doc, label, value);
       }
     }
 
@@ -811,10 +806,7 @@ export class ReportsService {
         sectionTitle(doc, "Traslados y alojamiento");
         for (const [label, value] of travelRows) {
           if (!value) continue;
-          ensureSpace(doc, 14);
-          doc.fontSize(9).fillColor(COLORS.gris).font("Helvetica-Bold");
-          doc.text(label, PAGE_MARGIN, doc.y, { continued: true, width: 140 });
-          doc.font("Helvetica").fillColor(COLORS.carbon).text(`: ${value}`);
+          labelValueRow(doc, label, value);
         }
       }
     }
