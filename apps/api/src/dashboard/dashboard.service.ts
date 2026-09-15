@@ -226,7 +226,15 @@ export class DashboardService {
     for (const { weight, height } of latestAnthroByPlayer.values()) {
       if (weight === null || height === null || !weight || !height) continue;
       const heightMeters = height / 100;
-      bmis.push(weight / (heightMeters * heightMeters));
+      const bmi = weight / (heightMeters * heightMeters);
+      // A record entered before the weight/height range validation existed
+      // (or edited directly in the DB) can still carry a unit mix-up — e.g.
+      // height "1.69" meant as meters instead of 169cm blows the BMI up to
+      // ~230000 and drags the whole club average with it. A single human
+      // BMI is never outside this range, so exclude rather than let one bad
+      // row corrupt everyone else's average.
+      if (bmi < 10 || bmi > 60) continue;
+      bmis.push(bmi);
     }
     const avgBmi = average(bmis);
 

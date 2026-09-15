@@ -186,13 +186,29 @@ export type CreateNutritionRecordDto = z.infer<typeof createNutritionRecordSchem
 
 export const physicalRecordTypeEnum = z.enum(["ANTHROPOMETRIC", "PERFORMANCE", "WEIGHT_CHECK"]);
 
-export const createPhysicalRecordSchema = z.object({
-  playerId: z.string().uuid(),
-  date: z.coerce.date(),
-  recordType: physicalRecordTypeEnum.optional().default("ANTHROPOMETRIC"),
-  metrics: z.record(z.string(), z.union([z.string(), z.number()])),
-  observations: z.string().max(2000).optional().nullable(),
-});
+export const createPhysicalRecordSchema = z
+  .object({
+    playerId: z.string().uuid(),
+    date: z.coerce.date(),
+    recordType: physicalRecordTypeEnum.optional().default("ANTHROPOMETRIC"),
+    metrics: z.record(z.string(), z.union([z.string(), z.number()])),
+    observations: z.string().max(2000).optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    // weight/height are always kilograms/centimeters wherever they appear in
+    // metrics (Área Médica, Revisión de Peso) — a value outside this range is
+    // almost certainly a unit mix-up (e.g. "1.69" meant as meters instead of
+    // 169 cm), and one bad entry silently blows up every average/IMC
+    // calculation that reads from this table.
+    const weight = data.metrics.weight;
+    if (weight !== undefined && (!Number.isFinite(Number(weight)) || Number(weight) < 10 || Number(weight) > 250)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["metrics", "weight"], message: "El peso debe estar en kilogramos, entre 10 y 250" });
+    }
+    const height = data.metrics.height;
+    if (height !== undefined && (!Number.isFinite(Number(height)) || Number(height) < 50 || Number(height) > 250)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["metrics", "height"], message: "La talla debe estar en centímetros, entre 50 y 250" });
+    }
+  });
 export type CreatePhysicalRecordDto = z.infer<typeof createPhysicalRecordSchema>;
 
 export const injuryStatusEnum = z.enum(["ACTIVE", "RECOVERING", "CLEARED"]);

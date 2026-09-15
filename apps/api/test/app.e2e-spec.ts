@@ -907,6 +907,37 @@ describe("FutbolJoven API (e2e)", () => {
       expect(res.status).toBe(200);
       expect(res.body.kpis.avgBmi).toBeCloseTo(70 / (1.75 * 1.75), 1);
     });
+
+    it("rejects an ANTHROPOMETRIC record with an implausible height (unit mix-up, e.g. meters instead of cm)", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/api/physical")
+        .set("Cookie", adminCookie)
+        .send({ playerId: playerAId, date: "2026-09-10", recordType: "ANTHROPOMETRIC", metrics: { weight: 65.5, height: 1.69 } });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects an implausible weight value too", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/api/physical")
+        .set("Cookie", adminCookie)
+        .send({ playerId: playerAId, date: "2026-09-10", recordType: "ANTHROPOMETRIC", metrics: { weight: 700, height: 175 } });
+      expect(res.status).toBe(400);
+    });
+
+    it("excludes a legacy bad BMI row (bypassing validation, as if entered before it existed) from the dashboard average instead of letting it skew it", async () => {
+      await prisma.physicalRecord.create({
+        data: {
+          playerId: playerAId,
+          recordedById: adminId,
+          date: new Date("2026-09-11"),
+          recordType: "ANTHROPOMETRIC",
+          metrics: JSON.stringify({ weight: 65.5, height: 1.69 }),
+        },
+      });
+      const res = await request(app.getHttpServer()).get("/api/dashboard/summary").set("Cookie", adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.body.kpis.avgBmi).toBeNull();
+    });
   });
 
   describe("Fase 6c — Inventario: cantidad necesaria/a comprar y export a Excel", () => {
