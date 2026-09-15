@@ -218,23 +218,6 @@ function GlobalDashboard({ summary }: { summary: GlobalSummary }) {
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Accesos rápidos</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3 text-sm">
-          <Link href="/players" className="text-rojo hover:underline">
-            Ver jugadores →
-          </Link>
-          <Link href="/evaluations" className="text-rojo hover:underline">
-            Cargar evaluaciones →
-          </Link>
-          <Link href="/audit" className="text-rojo hover:underline">
-            Revisar auditoría →
-          </Link>
-        </CardContent>
-      </Card>
     </div>
   );
 }
