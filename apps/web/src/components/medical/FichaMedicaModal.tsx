@@ -334,6 +334,11 @@ export function FichaMedicaModal({
                 const w = typeof r.metrics.weight === "number" ? r.metrics.weight : Number(r.metrics.weight) || 0;
                 const h = typeof r.metrics.height === "number" ? r.metrics.height : Number(r.metrics.height) || 0;
                 const rImc = computeImc(w, h);
+                const bodyFat = r.metrics.bodyFatPercent;
+                const muscleMass = r.metrics.muscleMassPercent;
+                const s6p = r.metrics.skinfoldsSum;
+                const imo = r.metrics.imo;
+                const hasComposition = bodyFat !== undefined || muscleMass !== undefined || s6p !== undefined || imo !== undefined;
                 return (
                   <div key={r.id} className="py-2 text-sm">
                     <div className="flex items-center justify-between">
@@ -342,6 +347,14 @@ export function FichaMedicaModal({
                         {w ? `${w} kg` : ""} {h ? `· ${h} cm` : ""} {rImc !== null ? `· IMC ${rImc.toFixed(1)}` : ""}
                       </span>
                     </div>
+                    {hasComposition && (
+                      <p className="text-xs text-gris">
+                        {bodyFat !== undefined ? `T. Adiposo ${bodyFat}%` : ""}
+                        {muscleMass !== undefined ? ` · T. Muscular ${muscleMass}%` : ""}
+                        {s6p !== undefined ? ` · S6P ${s6p}` : ""}
+                        {imo !== undefined ? ` · IMO ${imo}` : ""}
+                      </p>
+                    )}
                     <p className="text-[11px] text-gris">
                       Evaluó: {r.recordedBy.firstName} {r.recordedBy.lastName}
                     </p>
