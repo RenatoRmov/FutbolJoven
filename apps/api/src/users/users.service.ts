@@ -82,6 +82,16 @@ export class UsersService {
    * movimientos financieros) use onDelete: Restrict on purpose — deleting a
    * user who authored that history would corrupt it — so we surface that as a
    * clear message instead of a raw FK error.
+   *
+   * Which error shape that FK violation arrives as depends on the DB: SQLite
+   * (relationMode "prisma", emulated) normalizes it to a
+   * PrismaClientKnownRequestError with code P2003, but Postgres (relationMode
+   * "foreignKeys", native — what production actually runs) surfaces the raw
+   * driver error as a PrismaClientUnknownRequestError with no `.code` at all,
+   * only the Postgres SQLSTATE ("23001" restrict_violation / "23503"
+   * foreign_key_violation) inside the message. Matching only P2003 passed
+   * every local/SQLite test while silently 500ing in production — check the
+   * message text too so both shapes are caught.
    */
   async remove(id: string, actorId: string) {
     if (id === actorId) throw new BadRequestException("No podés eliminar tu propio usuario");
@@ -89,7 +99,14 @@ export class UsersService {
     try {
       await this.prisma.user.delete({ where: { id } });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+      const message = err instanceof Error ? err.message : String(err);
+      const isForeignKeyRestrict =
+        (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") ||
+        message.includes("23001") ||
+        message.includes("23503") ||
+        message.includes("RESTRICT") ||
+        message.includes("FOREIGN KEY constraint failed");
+      if (isForeignKeyRestrict) {
         throw new ConflictException(
           "No se puede eliminar: este usuario tiene registros asociados (evaluaciones, mediciones, lesiones, movimientos financieros, etc.). Desactivalo en su lugar para quitarle el acceso sin perder ese historial.",
         );
