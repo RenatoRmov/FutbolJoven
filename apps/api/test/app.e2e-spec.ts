@@ -1106,5 +1106,63 @@ describe("FutbolJoven API (e2e)", () => {
       const getRes = await request(app.getHttpServer()).get(`/api/users/${coachId}`).set("Cookie", adminCookie);
       expect(getRes.status).toBe(200);
     });
+
+    it("lets an admin edit a user's name, email, role and team assignments", async () => {
+      const rolesRes = await request(app.getHttpServer()).get("/api/roles").set("Cookie", adminCookie);
+      const roleId = rolesRes.body[0].id;
+      const createRes = await request(app.getHttpServer())
+        .post("/api/users")
+        .set("Cookie", adminCookie)
+        .send({ email: "editable@test.local", password: "Test1234!", firstName: "Before", lastName: "Edit", roleId });
+      expect(createRes.status).toBe(201);
+
+      const updateRes = await request(app.getHttpServer())
+        .patch(`/api/users/${createRes.body.id}`)
+        .set("Cookie", adminCookie)
+        .send({ firstName: "After", lastName: "Edited", email: "edited@test.local", teamIds: [teamAId] });
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body.firstName).toBe("After");
+      expect(updateRes.body.lastName).toBe("Edited");
+      expect(updateRes.body.email).toBe("edited@test.local");
+      expect(updateRes.body.teamAssignments).toHaveLength(1);
+      expect(updateRes.body.teamAssignments[0].team.id).toBe(teamAId);
+    });
+
+    it("rejects editing a user's email to one already in use, with a friendly message instead of a raw DB error", async () => {
+      const rolesRes = await request(app.getHttpServer()).get("/api/roles").set("Cookie", adminCookie);
+      const roleId = rolesRes.body[0].id;
+      const aRes = await request(app.getHttpServer())
+        .post("/api/users")
+        .set("Cookie", adminCookie)
+        .send({ email: "dupe-a@test.local", password: "Test1234!", firstName: "A", lastName: "User", roleId });
+      const bRes = await request(app.getHttpServer())
+        .post("/api/users")
+        .set("Cookie", adminCookie)
+        .send({ email: "dupe-b@test.local", password: "Test1234!", firstName: "B", lastName: "User", roleId });
+      expect(aRes.status).toBe(201);
+      expect(bRes.status).toBe(201);
+
+      const res = await request(app.getHttpServer()).patch(`/api/users/${bRes.body.id}`).set("Cookie", adminCookie).send({ email: "dupe-a@test.local" });
+      expect(res.status).toBe(409);
+    });
+
+    it("lets an admin change a user's password, and the user can log in with the new one", async () => {
+      const rolesRes = await request(app.getHttpServer()).get("/api/roles").set("Cookie", adminCookie);
+      const roleId = rolesRes.body[0].id;
+      const createRes = await request(app.getHttpServer())
+        .post("/api/users")
+        .set("Cookie", adminCookie)
+        .send({ email: "pwchange@test.local", password: "OldPass1234!", firstName: "Pw", lastName: "Change", roleId });
+      expect(createRes.status).toBe(201);
+
+      const updateRes = await request(app.getHttpServer())
+        .patch(`/api/users/${createRes.body.id}`)
+        .set("Cookie", adminCookie)
+        .send({ password: "NewPass1234!" });
+      expect(updateRes.status).toBe(200);
+
+      const loginRes = await request(app.getHttpServer()).post("/api/auth/login").send({ email: "pwchange@test.local", password: "NewPass1234!" });
+      expect(loginRes.status).toBe(200);
+    });
   });
 });

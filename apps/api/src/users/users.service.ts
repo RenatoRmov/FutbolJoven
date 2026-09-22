@@ -64,6 +64,12 @@ export class UsersService {
     if (dto.roleId !== undefined) data.roleId = dto.roleId;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.password) data.passwordHash = await bcrypt.hash(dto.password, 10);
+    if (dto.email !== undefined) {
+      const email = dto.email.toLowerCase();
+      const existing = await this.prisma.user.findUnique({ where: { email } });
+      if (existing && existing.id !== id) throw new ConflictException("Ya existe un usuario con ese email");
+      data.email = email;
+    }
 
     if (dto.teamIds !== undefined) {
       await this.prisma.userTeamAssignment.deleteMany({ where: { userId: id } });
