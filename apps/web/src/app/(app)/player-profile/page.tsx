@@ -2,13 +2,14 @@
 
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { HEALTH_SYSTEM_LABELS, DOMINANT_FOOT_LABELS, PLAYER_GENDER_LABELS, PLAYER_STATUS_LABELS } from "@futboljoven/shared";
+import { HEALTH_SYSTEM_LABELS, DOMINANT_FOOT_LABELS, PLAYER_GENDER_LABELS, PLAYER_STATUS_LABELS, PERMISSIONS } from "@futboljoven/shared";
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Select, Textarea } from "@/components/ui/Input";
 import { PositionSelect } from "@/components/player/PositionSelect";
 import { api, ApiError } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 import { Category, Player, Team } from "@/lib/types";
 
 const emptyForm = {
@@ -92,6 +93,9 @@ function PlayerProfilePageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const playerIdFromUrl = searchParams.get("playerId");
+  const { hasPermission } = useAuth();
+  const canEdit = hasPermission(PERMISSIONS.PLAYERS_EDIT_ALL, PERMISSIONS.PLAYERS_EDIT_ASSIGNED);
+  const canDelete = hasPermission(PERMISSIONS.PLAYERS_DELETE);
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -143,6 +147,7 @@ function PlayerProfilePageInner() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (selectedId && !canEdit) return; // fields stay enabled for readability; only the visible Save button was hidden
     setError(null);
     setSuccess(null);
     setSaving(true);
@@ -476,11 +481,16 @@ function PlayerProfilePageInner() {
           {error && <p className="text-sm text-rojo-oscuro">{error}</p>}
           {success && <p className="text-sm text-emerald-400">{success}</p>}
 
+          {selectedId && !canEdit && (
+            <p className="text-sm text-gris">Tu rol solo puede visualizar la ficha de jugadores existentes, no editarla.</p>
+          )}
           <div className="flex gap-3">
-            <Button type="submit" disabled={saving}>
-              {saving ? "Guardando..." : selectedId ? "Guardar cambios" : "Crear jugador"}
-            </Button>
-            {selectedId && (
+            {(!selectedId || canEdit) && (
+              <Button type="submit" disabled={saving}>
+                {saving ? "Guardando..." : selectedId ? "Guardar cambios" : "Crear jugador"}
+              </Button>
+            )}
+            {selectedId && canDelete && (
               <Button type="button" variant="danger" onClick={handleDeactivate} disabled={saving}>
                 Dar de baja
               </Button>

@@ -8,8 +8,10 @@ import { Input, Label, Select } from "@/components/ui/Input";
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table";
 import { Skeleton, EmptyState } from "@/components/ui/Skeleton";
 import { api, ApiError } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 import { Category, Player } from "@/lib/types";
 import { formatDate } from "@/lib/date";
+import { PERMISSIONS } from "@futboljoven/shared";
 
 interface PhysicalRecord {
   id: string;
@@ -30,6 +32,8 @@ const METRIC_FIELDS = [
 const emptyForm = { date: new Date().toISOString().slice(0, 10), sj: "", cmj: "", ie: "", sprint10m: "", sprint20m: "", sprint30m: "", vift: "" };
 
 export default function PhysicalPerformancePage() {
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission(PERMISSIONS.PHYSICAL_MANAGE);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState("");
   const [players, setPlayers] = useState<Player[]>([]);
@@ -126,6 +130,7 @@ export default function PhysicalPerformancePage() {
 
         {playerId && (
           <>
+            {canManage && (
             <Card>
               <CardHeader>
                 <CardTitle>Nueva medición</CardTitle>
@@ -156,6 +161,7 @@ export default function PhysicalPerformancePage() {
                 {error && <p className="mt-2 text-sm text-rojo-oscuro">{error}</p>}
               </CardContent>
             </Card>
+            )}
 
             {!records && (
               <div className="space-y-2">

@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { MATCH_STATUS_LABELS } from "@futboljoven/shared";
+import { MATCH_STATUS_LABELS, PERMISSIONS } from "@futboljoven/shared";
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -10,6 +10,7 @@ import { Input, Label, Select } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton, EmptyState } from "@/components/ui/Skeleton";
 import { api, ApiError } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 import { Player, Team } from "@/lib/types";
 import { formatDate } from "@/lib/date";
 
@@ -157,6 +158,8 @@ export default function TeamFixturePage() {
   const params = useParams<{ teamId: string }>();
   const router = useRouter();
   const teamId = params.teamId;
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission(PERMISSIONS.FIXTURES_MANAGE_ALL, PERMISSIONS.FIXTURES_MANAGE_ASSIGNED);
 
   const [team, setTeam] = useState<Team | null>(null);
   const [matches, setMatches] = useState<Match[] | null>(null);
@@ -230,6 +233,7 @@ export default function TeamFixturePage() {
           )}
         </div>
 
+        {canManage && (
         <Card>
           <CardHeader>
             <CardTitle>Nuevo partido</CardTitle>
@@ -246,6 +250,7 @@ export default function TeamFixturePage() {
             {error && <p className="mt-2 text-sm text-rojo-oscuro">{error}</p>}
           </CardContent>
         </Card>
+        )}
 
         {!matches && (
           <div className="space-y-2">
@@ -262,6 +267,7 @@ export default function TeamFixturePage() {
             key={match.id}
             match={match}
             players={players ?? []}
+            canManage={canManage}
             expanded={resultMatchId === match.id}
             editing={editingMatchId === match.id}
             onToggleResult={() => {
@@ -396,6 +402,7 @@ function MatchFormFields({ form, setForm, formKey }: { form: MatchFormState; set
 function MatchCard({
   match,
   players,
+  canManage,
   expanded,
   editing,
   onToggleResult,
@@ -406,6 +413,7 @@ function MatchCard({
 }: {
   match: Match;
   players: Player[];
+  canManage: boolean;
   expanded: boolean;
   editing: boolean;
   onToggleResult: () => void;
@@ -475,9 +483,11 @@ function MatchCard({
               </div>
             )}
             <Badge tone={STATUS_TONE[match.status] ?? "neutral"}>{MATCH_STATUS_LABELS[match.status as keyof typeof MATCH_STATUS_LABELS] ?? match.status}</Badge>
-            <Button size="sm" variant="secondary" onClick={onToggleResult}>
-              {expanded ? "Cerrar" : match.status === "PLAYED" ? "Editar resultado" : "Cargar resultado"}
-            </Button>
+            {canManage && (
+              <Button size="sm" variant="secondary" onClick={onToggleResult}>
+                {expanded ? "Cerrar" : match.status === "PLAYED" ? "Editar resultado" : "Cargar resultado"}
+              </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -485,17 +495,21 @@ function MatchCard({
             >
               Exportar
             </Button>
-            <Button size="sm" variant="ghost" onClick={onToggleEdit}>
-              {editing ? "Cerrar" : "Editar"}
-            </Button>
-            <Button size="sm" variant="ghost" className="text-rojo-oscuro" onClick={onDelete}>
-              Eliminar
-            </Button>
+            {canManage && (
+              <Button size="sm" variant="ghost" onClick={onToggleEdit}>
+                {editing ? "Cerrar" : "Editar"}
+              </Button>
+            )}
+            {canManage && (
+              <Button size="sm" variant="ghost" className="text-rojo-oscuro" onClick={onDelete}>
+                Eliminar
+              </Button>
+            )}
           </div>
         </div>
 
-        {expanded && <ResultForm match={match} players={players} onSaved={onSaved} />}
-        {editing && <EditForm match={match} onSave={onUpdate} onCancel={onToggleEdit} />}
+        {canManage && expanded && <ResultForm match={match} players={players} onSaved={onSaved} />}
+        {canManage && editing && <EditForm match={match} onSave={onUpdate} onCancel={onToggleEdit} />}
       </CardContent>
     </Card>
   );

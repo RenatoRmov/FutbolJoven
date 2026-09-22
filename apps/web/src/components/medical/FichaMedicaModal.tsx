@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { PERMISSIONS } from "@futboljoven/shared";
 import { Modal, HelpButton } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Select } from "@/components/ui/Input";
@@ -11,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Skeleton, EmptyState } from "@/components/ui/Skeleton";
 import { RecoveryBarChart } from "@/components/charts/RecoveryBarChart";
 import { api, ApiError } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/cn";
 import { formatDate } from "@/lib/date";
 
@@ -119,6 +121,8 @@ export function FichaMedicaModal({
   const [weightCheckForm, setWeightCheckForm] = useState(emptyWeightCheckForm);
   const [wcSaving, setWcSaving] = useState(false);
   const [wcError, setWcError] = useState<string | null>(null);
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission(PERMISSIONS.PHYSICAL_MANAGE);
 
   function load() {
     api.get<PhysicalRecord[]>(`/physical/player/${playerId}?recordType=ANTHROPOMETRIC`).then(setRecords);
@@ -274,6 +278,7 @@ export function FichaMedicaModal({
             <HelpButton onClick={() => setGlossaryOpen(true)} />
           </div>
 
+          {canManage && (
           <form onSubmit={handleSaveMeasurement} className="space-y-3">
             <div>
               <Label>Fecha de la medición</Label>
@@ -322,6 +327,7 @@ export function FichaMedicaModal({
               {saving ? "Guardando..." : "Guardar nueva medición"}
             </Button>
           </form>
+          )}
 
           <p className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wide text-gris">Historial de mediciones</p>
           {!records ? (
@@ -377,9 +383,11 @@ export function FichaMedicaModal({
             ).map(([value, label, tone]) => (
               <button
                 key={value}
+                disabled={!canManage}
                 onClick={() => setDisponibilidad(value)}
                 className={cn(
                   "rounded-xl border-2 py-2.5 text-center text-sm font-bold transition-colors",
+                  !canManage && "cursor-not-allowed opacity-70",
                   aptitud === value
                     ? tone === "success"
                       ? "border-[#1E7A3E] bg-[#E4F5E9] text-[#1E7A3E]"
@@ -394,6 +402,8 @@ export function FichaMedicaModal({
             ))}
           </div>
 
+          {canManage && (
+          <>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gris">¿Presenta lesión?</p>
           <div className="mb-4 flex gap-2">
             <button
@@ -411,8 +421,10 @@ export function FichaMedicaModal({
               No
             </button>
           </div>
+          </>
+          )}
 
-          {hasInjury && (
+          {canManage && hasInjury && (
             <form onSubmit={handleSaveDiagnosis} className="mb-5 space-y-3 rounded-xl border border-borde p-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -534,6 +546,7 @@ export function FichaMedicaModal({
             </Button>
           </div>
 
+          {canManage && (
           <form onSubmit={handleSaveWeightCheck} className="space-y-3">
             <div>
               <Label>Fecha</Label>
@@ -578,6 +591,7 @@ export function FichaMedicaModal({
               {wcSaving ? "Guardando..." : "Guardar revisión de peso"}
             </Button>
           </form>
+          )}
 
           <p className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wide text-gris">Historial de revisiones</p>
           {!weightCheckRecords ? (

@@ -10,9 +10,10 @@ import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table";
 import { Skeleton, EmptyState } from "@/components/ui/Skeleton";
 import { Modal, HelpButton } from "@/components/ui/Modal";
 import { api, ApiError } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 import { Player, Team } from "@/lib/types";
 import { formatDate } from "@/lib/date";
-import { EVALUATION_TYPES } from "@futboljoven/shared";
+import { EVALUATION_TYPES, PERMISSIONS } from "@futboljoven/shared";
 
 interface Dimension {
   id: string;
@@ -101,6 +102,9 @@ export default function QuickEvaluationPage() {
   const params = useParams<{ teamId: string }>();
   const router = useRouter();
   const teamId = params.teamId;
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission(PERMISSIONS.EVALUATIONS_CREATE_ALL, PERMISSIONS.EVALUATIONS_CREATE_ASSIGNED);
+  const canExport = hasPermission(PERMISSIONS.DATA_EXPORT);
 
   const [team, setTeam] = useState<Team | null>(null);
   const [players, setPlayers] = useState<Player[] | null>(null);
@@ -249,13 +253,15 @@ export default function QuickEvaluationPage() {
             ← Volver a categorías
           </Button>
           <div className="flex items-center gap-3">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => api.download(`/export/evaluations?teamId=${teamId}`, `evaluaciones-${team?.name ?? teamId}.xlsx`)}
-            >
-              Exportar Excel
-            </Button>
+            {canExport && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => api.download(`/export/evaluations?teamId=${teamId}`, `evaluaciones-${team?.name ?? teamId}.xlsx`)}
+              >
+                Exportar Excel
+              </Button>
+            )}
             <div className="flex items-center gap-2 text-sm text-gris">
               <span>¿Qué evalúa cada dimensión?</span>
               <HelpButton onClick={() => setGlossaryOpen(true)} />
@@ -263,6 +269,10 @@ export default function QuickEvaluationPage() {
           </div>
         </div>
 
+        {!canCreate && <EmptyState title="No tenés permiso para cargar evaluaciones" description="Tu rol solo puede visualizar. Hablá con un administrador si necesitás cargar puntajes." />}
+
+        {canCreate && (
+        <>
         <Card>
           <CardContent className="flex flex-wrap items-end gap-4 py-4">
             <div>
@@ -402,6 +412,8 @@ export default function QuickEvaluationPage() {
               ))}
             </Tbody>
           </Table>
+        )}
+        </>
         )}
       </div>
 
