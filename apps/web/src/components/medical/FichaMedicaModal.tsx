@@ -23,6 +23,47 @@ interface PhysicalRecord {
   recordedBy: { firstName: string; lastName: string };
 }
 
+interface InsuranceInfo {
+  insuranceGuardianRelationship: string | null;
+  insuranceGuardianName: string | null;
+  insuranceGuardianRut: string | null;
+  insuranceGuardianPhone: string | null;
+  insuranceGuardianEmail: string | null;
+  insuranceRequestedBy: string | null;
+  insuranceEventDate: string | null;
+  insuranceEventLocation: string | null;
+  insuranceActivationReason: string | null;
+  insuranceReferralCenter: string | null;
+  insuranceTransportMode: string | null;
+  insuranceKinesiologist: string | null;
+  insuranceProviderName: string | null;
+  insurancePolicyNumber: string | null;
+  insuranceClaimNumber: string | null;
+}
+
+const INSURANCE_FIELDS: { key: keyof InsuranceInfo; label: string }[] = [
+  { key: "insuranceGuardianRelationship", label: "Relación con el paciente" },
+  { key: "insuranceGuardianName", label: "Nombre completo del apoderado" },
+  { key: "insuranceGuardianRut", label: "RUT del apoderado" },
+  { key: "insuranceGuardianPhone", label: "Teléfono de contacto" },
+  { key: "insuranceGuardianEmail", label: "Correo electrónico" },
+  { key: "insuranceRequestedBy", label: "Quién lo solicita" },
+  { key: "insuranceEventDate", label: "Fecha del evento" },
+  { key: "insuranceEventLocation", label: "Lugar del accidente / evento" },
+  { key: "insuranceActivationReason", label: "Motivo de activación" },
+  { key: "insuranceReferralCenter", label: "Centro médico al que será derivado" },
+  { key: "insuranceTransportMode", label: "Modo de traslado (opcional)" },
+  { key: "insuranceKinesiologist", label: "Kinesiólogo a cargo del seguimiento" },
+  { key: "insuranceProviderName", label: "Seguro a activar" },
+  { key: "insurancePolicyNumber", label: "N° de póliza / convenio" },
+  { key: "insuranceClaimNumber", label: "N° de siniestro" },
+];
+
+const emptyInsuranceForm: InsuranceInfo = INSURANCE_FIELDS.reduce(
+  (acc, f) => ({ ...acc, [f.key]: "" }),
+  {} as InsuranceInfo,
+);
+
 interface Injury {
   id: string;
   description: string;
@@ -123,11 +164,20 @@ export function FichaMedicaModal({
   const [wcError, setWcError] = useState<string | null>(null);
   const { hasPermission } = useAuth();
   const canManage = hasPermission(PERMISSIONS.PHYSICAL_MANAGE);
+  const canEditPlayer = hasPermission(PERMISSIONS.PLAYERS_EDIT_ALL, PERMISSIONS.PLAYERS_EDIT_ASSIGNED);
+  const [insuranceOpen, setInsuranceOpen] = useState(false);
+  const [insuranceForm, setInsuranceForm] = useState<InsuranceInfo>(emptyInsuranceForm);
+  const [insuranceSaving, setInsuranceSaving] = useState(false);
+  const [insuranceSaved, setInsuranceSaved] = useState(false);
+  const [insuranceError, setInsuranceError] = useState<string | null>(null);
 
   function load() {
     api.get<PhysicalRecord[]>(`/physical/player/${playerId}?recordType=ANTHROPOMETRIC`).then(setRecords);
     api.get<Injury[]>(`/injuries/player/${playerId}`).then(setInjuries);
     api.get<PhysicalRecord[]>(`/physical/player/${playerId}?recordType=WEIGHT_CHECK`).then(setWeightCheckRecords);
+    api.get<InsuranceInfo>(`/players/${playerId}`).then((p) => {
+      setInsuranceForm(INSURANCE_FIELDS.reduce((acc, f) => ({ ...acc, [f.key]: p[f.key] ?? "" }), {} as InsuranceInfo));
+    });
   }
 
   useEffect(load, [playerId]);
@@ -244,6 +294,21 @@ export function FichaMedicaModal({
       setError(err instanceof ApiError ? err.message : "No se pudo registrar el diagnóstico");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveInsurance(e: FormEvent) {
+    e.preventDefault();
+    setInsuranceError(null);
+    setInsuranceSaved(false);
+    setInsuranceSaving(true);
+    try {
+      await api.patch(`/players/${playerId}`, insuranceForm);
+      setInsuranceSaved(true);
+    } catch (err) {
+      setInsuranceError(err instanceof ApiError ? err.message : "No se pudo guardar la información del seguro");
+    } finally {
+      setInsuranceSaving(false);
     }
   }
 
@@ -525,6 +590,68 @@ export function FichaMedicaModal({
               </CardContent>
             </Card>
           )}
+
+          <div className="mt-5 border-t border-borde pt-4">
+            <button
+              type="button"
+              className="text-xs font-semibold text-rojo hover:underline"
+              onClick={() => setInsuranceOpen((v) => !v)}
+            >
+              {insuranceOpen ? "Ocultar datos de seguro" : "Ver datos de seguro / activación en caso de lesión"}
+            </button>
+
+            {insuranceOpen && (
+              <form onSubmit={handleSaveInsurance} className="mt-3 space-y-3 rounded-xl border border-borde p-3">
+                <p className="text-[11px] leading-snug text-gris">
+                  Información complementaria para activar el seguro escolar/deportivo si el jugador sufre una lesión — no es parte del diagnóstico médico.
+                </p>
+
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gris">Apoderado que activa</p>
+                  <div className="mt-1.5 grid grid-cols-2 gap-2">
+                    {INSURANCE_FIELDS.slice(0, 5).map((f) => (
+                      <div key={f.key}>
+                        <Label className="text-[11px]">{f.label}</Label>
+                        <Input
+                          disabled={!canEditPlayer}
+                          className="h-8 text-xs"
+                          value={insuranceForm[f.key] ?? ""}
+                          onChange={(e) => setInsuranceForm({ ...insuranceForm, [f.key]: e.target.value })}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gris">Solicitud y detalle de activación</p>
+                  <div className="mt-1.5 grid grid-cols-2 gap-2">
+                    {INSURANCE_FIELDS.slice(5).map((f) => (
+                      <div key={f.key}>
+                        <Label className="text-[11px]">{f.label}</Label>
+                        <Input
+                          disabled={!canEditPlayer}
+                          className="h-8 text-xs"
+                          value={insuranceForm[f.key] ?? ""}
+                          onChange={(e) => setInsuranceForm({ ...insuranceForm, [f.key]: e.target.value })}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {canEditPlayer && (
+                  <>
+                    {insuranceError && <p className="text-sm text-rojo-oscuro">{insuranceError}</p>}
+                    {insuranceSaved && !insuranceError && <p className="text-xs text-[#1E7A3E]">Guardado.</p>}
+                    <Button type="submit" size="sm" disabled={insuranceSaving}>
+                      {insuranceSaving ? "Guardando..." : "Guardar datos de seguro"}
+                    </Button>
+                  </>
+                )}
+              </form>
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="revision-peso" className="pt-4">

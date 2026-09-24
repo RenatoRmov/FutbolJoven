@@ -229,6 +229,25 @@ model Player {
   emergencyContactPhoneAlt     String?
   emergencyContactAddress      String?
 
+  // Seguro escolar/deportivo — datos de referencia para activarlo ante una
+  // lesión. Complementario al registro médico, no un historial por evento:
+  // se completa/actualiza una vez y queda a mano para cuando haga falta.
+  insuranceGuardianRelationship String?
+  insuranceGuardianName         String?
+  insuranceGuardianRut          String?
+  insuranceGuardianPhone        String?
+  insuranceGuardianEmail        String?
+  insuranceRequestedBy          String?
+  insuranceEventDate            String?
+  insuranceEventLocation        String?
+  insuranceActivationReason     String?
+  insuranceReferralCenter       String?
+  insuranceTransportMode        String?
+  insuranceKinesiologist        String?
+  insuranceProviderName         String?
+  insurancePolicyNumber         String?
+  insuranceClaimNumber          String?
+
   isDemo    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

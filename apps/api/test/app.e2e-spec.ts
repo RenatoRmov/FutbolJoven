@@ -1165,4 +1165,75 @@ describe("FutbolJoven API (e2e)", () => {
       expect(loginRes.status).toBe(200);
     });
   });
+
+  describe("Fase 8 — minutos jugados enriquecido (citaciones/titulares, multi-categoría), datos de seguro", () => {
+    it("includes a player in a team's minutes PDF for a match they played while 'subiendo' from another category", async () => {
+      const matchRes = await request(app.getHttpServer())
+        .post("/api/fixtures")
+        .set("Cookie", adminCookie)
+        .send({ teamId: teamBId, opponent: "Rival Multi-Categoría", date: "2026-11-20" });
+      expect(matchRes.status).toBe(201);
+
+      const resultRes = await request(app.getHttpServer())
+        .post(`/api/fixtures/${matchRes.body.id}/result`)
+        .set("Cookie", adminCookie)
+        .send({
+          teamScore: 3,
+          opponentScore: 0,
+          // playerAId's currentTeamId is teamA (Sub-15) — here they play up for teamB's (Sub-16) match.
+          appearances: [{ playerId: playerAId, started: true, startingEleven: true, minutesPlayed: 45, goals: 1, yellowCards: 1 }],
+        });
+      expect(resultRes.status).toBe(201);
+
+      const pdfRes = await request(app.getHttpServer()).get(`/api/reports/teams/${teamBId}/minutes-pdf`).set("Cookie", adminCookie);
+      expect(pdfRes.status).toBe(200);
+      expect(pdfRes.headers["content-type"]).toContain("application/pdf");
+      expect(Number(pdfRes.headers["content-length"])).toBeGreaterThan(0);
+    });
+
+    it("persists and returns the player's insurance/guardian-activation fields via PATCH /players/:id", async () => {
+      const insuranceData = {
+        insuranceGuardianRelationship: "Padre",
+        insuranceGuardianName: "Juan Pérez",
+        insuranceGuardianRut: "12.345.678-9",
+        insuranceGuardianPhone: "+56911112222",
+        insuranceGuardianEmail: "juan.perez@test.local",
+        insuranceRequestedBy: "Cuerpo técnico",
+        insuranceEventDate: "2026-09-10",
+        insuranceEventLocation: "Cancha Municipal Limache",
+        insuranceActivationReason: "Fractura de tobillo en entrenamiento",
+        insuranceReferralCenter: "Hospital San José",
+        insuranceTransportMode: "Ambulancia",
+        insuranceKinesiologist: "Kine Test",
+        insuranceProviderName: "Seguro Escolar",
+        insurancePolicyNumber: "POL-0001",
+        insuranceClaimNumber: "SIN-0001",
+      };
+
+      const patchRes = await request(app.getHttpServer()).patch(`/api/players/${playerAId}`).set("Cookie", adminCookie).send(insuranceData);
+      expect(patchRes.status).toBe(200);
+      for (const [key, value] of Object.entries(insuranceData)) {
+        expect(patchRes.body[key]).toBe(value);
+      }
+
+      const getRes = await request(app.getHttpServer()).get(`/api/players/${playerAId}`).set("Cookie", adminCookie);
+      expect(getRes.status).toBe(200);
+      for (const [key, value] of Object.entries(insuranceData)) {
+        expect(getRes.body[key]).toBe(value);
+      }
+    });
+
+    it("blocks a coach from setting insurance fields on a player outside their assigned team", async () => {
+      const res = await request(app.getHttpServer())
+        .get("/api/players")
+        .set("Cookie", adminCookie);
+      const playerB = res.body.find((p: any) => p.currentTeamId === teamBId);
+
+      const updateRes = await request(app.getHttpServer())
+        .patch(`/api/players/${playerB.id}`)
+        .set("Cookie", coachCookie)
+        .send({ insuranceGuardianName: "Should not be allowed" });
+      expect(updateRes.status).toBe(403);
+    });
+  });
 });

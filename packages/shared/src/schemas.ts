@@ -70,6 +70,23 @@ export const createPlayerSchema = z.object({
   emergencyContactPhone: z.string().max(40).optional().nullable(),
   emergencyContactPhoneAlt: z.string().max(40).optional().nullable(),
   emergencyContactAddress: z.string().max(300).optional().nullable(),
+
+  // Seguro escolar/deportivo — datos de referencia para activarlo ante una lesión.
+  insuranceGuardianRelationship: z.string().max(80).optional().nullable(),
+  insuranceGuardianName: z.string().max(150).optional().nullable(),
+  insuranceGuardianRut: z.string().max(20).optional().nullable(),
+  insuranceGuardianPhone: z.string().max(40).optional().nullable(),
+  insuranceGuardianEmail: z.string().email().max(120).optional().nullable().or(z.literal("")),
+  insuranceRequestedBy: z.string().max(150).optional().nullable(),
+  insuranceEventDate: z.string().max(20).optional().nullable(),
+  insuranceEventLocation: z.string().max(200).optional().nullable(),
+  insuranceActivationReason: z.string().max(400).optional().nullable(),
+  insuranceReferralCenter: z.string().max(200).optional().nullable(),
+  insuranceTransportMode: z.string().max(150).optional().nullable(),
+  insuranceKinesiologist: z.string().max(150).optional().nullable(),
+  insuranceProviderName: z.string().max(150).optional().nullable(),
+  insurancePolicyNumber: z.string().max(60).optional().nullable(),
+  insuranceClaimNumber: z.string().max(60).optional().nullable(),
 });
 export type CreatePlayerDto = z.infer<typeof createPlayerSchema>;
 

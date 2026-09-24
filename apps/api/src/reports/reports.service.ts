@@ -688,34 +688,54 @@ export class ReportsService {
   }
 
   /**
-   * Minutos jugados por jugador del plantel activo, sobre el total de partidos
-   * jugados por el equipo. Los "minutos posibles" de cada partido se toman como
-   * el máximo minutesPlayed registrado en ese partido (no un valor fijo de 90),
-   * porque la duración real varía por categoría/formato y no hay un campo de
-   * duración en el modelo Match. Se ordena de menor a mayor % jugado para que
-   * los jugadores con menos participación aparezcan primero — ese es el uso que
-   * le va a dar el cuerpo técnico a este reporte.
+   * Minutos jugados por jugador, sobre el total de partidos jugados por el
+   * equipo. Incluye tanto al plantel activo (con 0 en todo si nunca los citaron
+   * — para que salten a la vista los que casi no juegan) como a cualquier otro
+   * jugador que haya sido citado en alguno de estos partidos aunque hoy juegue
+   * en otra categoría (ej. un Sub-15 que "subió" a jugar un partido de Sub-16):
+   * antes solo se contaba a quien tuviera currentTeamId igual a este equipo, así
+   * que esos partidos "prestados" desaparecían silenciosamente del reporte de
+   * la categoría donde realmente se jugaron.
+   *
+   * Los "minutos posibles" de cada partido se toman como el máximo
+   * minutesPlayed registrado en ese partido (no un valor fijo de 90), porque la
+   * duración real varía por categoría/formato y no hay un campo de duración en
+   * el modelo Match. Se ordena de menor a mayor % jugado para que los
+   * jugadores con menos participación aparezcan primero — ese es el uso que le
+   * va a dar el cuerpo técnico a este reporte.
    */
   async buildMinutesReportPdf(user: AuthenticatedUser, teamId: string): Promise<Buffer> {
     assertTeamInScope(user, teamId, PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED);
     const team = await this.prisma.team.findUnique({ where: { id: teamId }, include: { category: true, season: true } });
     if (!team) throw new NotFoundException("Equipo no encontrado");
 
-    const [players, matches] = await Promise.all([
+    const [rosterPlayers, matches] = await Promise.all([
       this.prisma.player.findMany({ where: { currentTeamId: teamId, status: "ACTIVE" }, orderBy: [{ lastName: "asc" }, { firstName: "asc" }] }),
-      this.prisma.match.findMany({ where: { teamId, status: "PLAYED" }, include: { appearances: true }, orderBy: { date: "asc" } }),
+      this.prisma.match.findMany({
+        where: { teamId, status: "PLAYED" },
+        include: { appearances: { include: { player: { select: { firstName: true, lastName: true } } } } },
+        orderBy: { date: "asc" },
+      }),
     ]);
 
+    type Row = { player: { firstName: string; lastName: string }; called: number; starter: number; minutes: number; goals: number; yellow: number; red: number };
     let totalPossibleMinutes = 0;
-    const statsByPlayerId = new Map<string, { minutes: number; goals: number; yellow: number; red: number }>();
-    for (const p of players) statsByPlayerId.set(p.id, { minutes: 0, goals: 0, yellow: 0, red: 0 });
+    const statsByPlayerId = new Map<string, Row>();
+    for (const p of rosterPlayers) statsByPlayerId.set(p.id, { player: p, called: 0, starter: 0, minutes: 0, goals: 0, yellow: 0, red: 0 });
 
     for (const match of matches) {
       const matchMinutes = match.appearances.reduce((max, a) => Math.max(max, a.minutesPlayed ?? 0), 0);
       totalPossibleMinutes += matchMinutes;
       for (const a of match.appearances) {
-        const stats = statsByPlayerId.get(a.playerId);
-        if (!stats) continue; // ya no está en el plantel activo de este equipo
+        let stats = statsByPlayerId.get(a.playerId);
+        if (!stats) {
+          // Citado a este partido pero no forma parte del plantel activo actual
+          // de este equipo (subió/bajó de categoría) — igual cuenta acá.
+          stats = { player: a.player, called: 0, starter: 0, minutes: 0, goals: 0, yellow: 0, red: 0 };
+          statsByPlayerId.set(a.playerId, stats);
+        }
+        if (a.started) stats.called += 1;
+        if (a.startingEleven) stats.starter += 1;
         stats.minutes += a.minutesPlayed ?? 0;
         stats.goals += a.goals;
         stats.yellow += a.yellowCards;
@@ -723,39 +743,45 @@ export class ReportsService {
       }
     }
 
-    const rows = players
-      .map((p) => {
-        const s = statsByPlayerId.get(p.id)!;
-        const pct = totalPossibleMinutes > 0 ? (s.minutes / totalPossibleMinutes) * 100 : 0;
-        return { player: p, ...s, pct };
-      })
-      .sort((a, b) => a.pct - b.pct);
+    const totalMatches = matches.length;
+    const rows = Array.from(statsByPlayerId.values())
+      .map((s) => ({ ...s, pctMinutes: totalPossibleMinutes > 0 ? (s.minutes / totalPossibleMinutes) * 100 : 0 }))
+      .sort((a, b) => a.pctMinutes - b.pctMinutes);
 
     return renderPdfToBuffer((doc) => {
       addHeader(doc, "Minutos jugados", `${team.name}${team.category ? ` — ${team.category.name}` : ""}${team.season ? ` · ${team.season.name}` : ""}`);
 
       sectionTitle(doc, "Resumen");
       doc.fontSize(9).fillColor(COLORS.gris);
-      fullWidthText(doc, `Partidos jugados: ${matches.length}    Minutos posibles: ${totalPossibleMinutes}`);
+      fullWidthText(doc, `Partidos jugados: ${totalMatches}    Minutos posibles: ${totalPossibleMinutes}`);
 
-      if (players.length === 0) {
+      if (rows.length === 0) {
         doc.fontSize(9).fillColor(COLORS.gris);
-        fullWidthText(doc, "Sin jugadores activos en el plantel.");
+        fullWidthText(doc, "Sin jugadores citados en partidos jugados.");
       } else {
+        const pct = (n: number) => (totalMatches > 0 ? `${Math.round((n / totalMatches) * 100)}%` : "—");
         drawTable(
           doc,
           [
-            { key: "player", header: "Jugador", width: 175 },
-            { key: "minutes", header: "Min. jugados", width: 80, align: "center" },
-            { key: "pct", header: "% Min.", width: 60, align: "center" },
-            { key: "goals", header: "Goles", width: 50, align: "center" },
-            { key: "yellow", header: "Amar.", width: 50, align: "center" },
-            { key: "red", header: "Roja", width: 45, align: "center" },
+            { key: "player", header: "Jugador", width: 140 },
+            { key: "called", header: "Citac.", width: 40, align: "center" },
+            { key: "pctCalled", header: "% Citac.", width: 46, align: "center" },
+            { key: "starter", header: "Titular.", width: 44, align: "center" },
+            { key: "pctStarter", header: "% Titular.", width: 50, align: "center" },
+            { key: "minutes", header: "Min.", width: 40, align: "center" },
+            { key: "pctMinutes", header: "% Min.", width: 42, align: "center" },
+            { key: "goals", header: "Goles", width: 36, align: "center" },
+            { key: "yellow", header: "Amar.", width: 36, align: "center" },
+            { key: "red", header: "Roja", width: 36, align: "center" },
           ],
           rows.map((r) => ({
             player: `${r.player.firstName} ${r.player.lastName}`,
+            called: String(r.called),
+            pctCalled: pct(r.called),
+            starter: String(r.starter),
+            pctStarter: pct(r.starter),
             minutes: String(r.minutes),
-            pct: totalPossibleMinutes > 0 ? `${r.pct.toFixed(0)}%` : "—",
+            pctMinutes: totalPossibleMinutes > 0 ? `${r.pctMinutes.toFixed(0)}%` : "—",
             goals: String(r.goals),
             yellow: String(r.yellow),
             red: String(r.red),
