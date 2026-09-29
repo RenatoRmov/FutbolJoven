@@ -6,7 +6,10 @@ import { json } from "express";
 import { AppModule } from "./app.module";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
 
-async function bootstrap() {
+// Split from bootstrap() so the Vercel serverless handler (apps/api/api/index.js)
+// can reuse the exact same Express app without calling .listen(), which is
+// invalid outside a long-running process.
+export async function createApp() {
   const app = await NestFactory.create(AppModule);
 
   app.use(cookieParser());
@@ -20,6 +23,13 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
   app.setGlobalPrefix("api");
 
+  await app.init();
+  return app;
+}
+
+async function bootstrap() {
+  const app = await createApp();
+
   // Hosting platforms (Railway, Render, etc.) inject PORT and expect the
   // app to bind to it; API_PORT/3001 is the local-dev fallback.
   const port = process.env.PORT ?? process.env.API_PORT ?? 3001;
@@ -28,4 +38,9 @@ async function bootstrap() {
   console.log(`FutbolJoven API listening on port ${port}`);
 }
 
-bootstrap();
+// Only run the long-running server when this file is executed directly
+// (local dev, or a traditional host like Railway/Render). When the Vercel
+// serverless handler requires this module instead, it just wants createApp.
+if (require.main === module) {
+  bootstrap();
+}

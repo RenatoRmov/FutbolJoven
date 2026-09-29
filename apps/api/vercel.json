@@ -1,0 +1,9 @@
+{
+  "framework": null,
+  "installCommand": "echo skip",
+  "buildCommand": "cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @futboljoven/shared build && pnpm --filter @futboljoven/api exec prisma generate --schema=prisma/schema.production.prisma && pnpm --filter @futboljoven/api build",
+  "functions": {
+    "api/index.js": { "maxDuration": 30 }
+  },
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
+}
