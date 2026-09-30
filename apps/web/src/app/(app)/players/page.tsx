@@ -129,7 +129,10 @@ export default function PlayersPage() {
                 return (
                   <Tr key={p.id}>
                     <Td>
-                      <Link href={`/players/${p.id}`} className="font-medium text-carbon hover:text-rojo">
+                      <Link
+                        href={p.currentTeamId ? `/players/${p.id}?teamId=${p.currentTeamId}` : `/players/${p.id}`}
+                        className="font-medium text-carbon hover:text-rojo"
+                      >
                         {p.firstName} {p.lastName}
                       </Link>
                     </Td>

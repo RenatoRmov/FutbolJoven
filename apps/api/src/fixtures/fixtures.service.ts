@@ -108,17 +108,27 @@ export class FixturesService {
   }
 
   /** "Minutos y Partidos" tab — this player's appearances across all matches. */
-  async findAppearancesForPlayer(user: AuthenticatedUser, playerId: string) {
+  /**
+   * `teamId` scopes to the category being viewed, via the match's own team
+   * (not the player's currentTeamId) — a player who plays for more than one
+   * team has MatchAppearance rows tied to whichever team played that match,
+   * so filtering by `match.teamId` is what actually separates "what they did
+   * for Sub-15" from "what they did for Sub-16" (same fix already applied to
+   * the minutes-played PDF export). Omitted only for direct navigation with
+   * no team context, where it falls back to the player's current team.
+   */
+  async findAppearancesForPlayer(user: AuthenticatedUser, playerId: string, teamId?: string) {
     const player = await this.prisma.player.findUnique({ where: { id: playerId } });
     if (!player) throw new NotFoundException("Jugador no encontrado");
-    if (player.currentTeamId) {
-      assertTeamInScope(user, player.currentTeamId, PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED);
+    const scopeTeamId = teamId ?? player.currentTeamId;
+    if (scopeTeamId) {
+      assertTeamInScope(user, scopeTeamId, PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED);
     } else if (!user.permissions.includes(PERMISSIONS.FIXTURES_VIEW_ALL)) {
       return [];
     }
 
     return this.prisma.matchAppearance.findMany({
-      where: { playerId },
+      where: { playerId, ...(teamId ? { match: { teamId } } : {}) },
       include: { match: { select: { id: true, opponent: true, date: true, isHome: true, teamScore: true, opponentScore: true, status: true } } },
       orderBy: { match: { date: "desc" } },
     });

@@ -1236,4 +1236,61 @@ describe("FutbolJoven API (e2e)", () => {
       expect(updateRes.status).toBe(403);
     });
   });
+
+  describe("Fase 9 — Evaluaciones y Minutos/Partidos en la ficha del jugador, separados por categoría", () => {
+    it("scopes a player's evaluations to the ?teamId requested, for a player evaluated under two different teams", async () => {
+      const teamAEval = await request(app.getHttpServer())
+        .post("/api/evaluations")
+        .set("Cookie", adminCookie)
+        .send({ playerId: playerAId, teamId: teamAId, date: "2026-11-01", type: "MATCH", scores: [{ dimensionId, value: 7 }] });
+      expect(teamAEval.status).toBe(201);
+
+      const teamBEval = await request(app.getHttpServer())
+        .post("/api/evaluations")
+        .set("Cookie", adminCookie)
+        .send({ playerId: playerAId, teamId: teamBId, date: "2026-11-02", type: "MATCH", scores: [{ dimensionId, value: 9 }] });
+      expect(teamBEval.status).toBe(201);
+
+      const scopedToA = await request(app.getHttpServer()).get(`/api/evaluations/player/${playerAId}?teamId=${teamAId}`).set("Cookie", adminCookie);
+      expect(scopedToA.status).toBe(200);
+      expect(scopedToA.body.some((e: any) => e.id === teamAEval.body.id)).toBe(true);
+      expect(scopedToA.body.some((e: any) => e.id === teamBEval.body.id)).toBe(false);
+
+      const scopedToB = await request(app.getHttpServer()).get(`/api/evaluations/player/${playerAId}?teamId=${teamBId}`).set("Cookie", adminCookie);
+      expect(scopedToB.status).toBe(200);
+      expect(scopedToB.body.some((e: any) => e.id === teamBEval.body.id)).toBe(true);
+      expect(scopedToB.body.some((e: any) => e.id === teamAEval.body.id)).toBe(false);
+
+      // Sin ?teamId, se mantiene el comportamiento anterior (todas las evaluaciones del jugador).
+      const unscoped = await request(app.getHttpServer()).get(`/api/evaluations/player/${playerAId}`).set("Cookie", adminCookie);
+      expect(unscoped.body.some((e: any) => e.id === teamAEval.body.id)).toBe(true);
+      expect(unscoped.body.some((e: any) => e.id === teamBEval.body.id)).toBe(true);
+    });
+
+    it("scopes a player's match appearances to the ?teamId requested, via the match's own team", async () => {
+      const matchRes = await request(app.getHttpServer())
+        .post("/api/fixtures")
+        .set("Cookie", adminCookie)
+        .send({ teamId: teamBId, opponent: "Rival Ficha Separada", date: "2026-11-20" });
+      expect(matchRes.status).toBe(201);
+
+      const resultRes = await request(app.getHttpServer())
+        .post(`/api/fixtures/${matchRes.body.id}/result`)
+        .set("Cookie", adminCookie)
+        .send({ teamScore: 1, opponentScore: 1, appearances: [{ playerId: playerAId, started: true, minutesPlayed: 60, goals: 0, yellowCards: 0 }] });
+      expect(resultRes.status).toBe(201);
+
+      const scopedToB = await request(app.getHttpServer())
+        .get(`/api/fixtures/player/${playerAId}/appearances?teamId=${teamBId}`)
+        .set("Cookie", adminCookie);
+      expect(scopedToB.status).toBe(200);
+      expect(scopedToB.body.some((a: any) => a.match.id === matchRes.body.id)).toBe(true);
+
+      const scopedToA = await request(app.getHttpServer())
+        .get(`/api/fixtures/player/${playerAId}/appearances?teamId=${teamAId}`)
+        .set("Cookie", adminCookie);
+      expect(scopedToA.status).toBe(200);
+      expect(scopedToA.body.some((a: any) => a.match.id === matchRes.body.id)).toBe(false);
+    });
+  });
 });

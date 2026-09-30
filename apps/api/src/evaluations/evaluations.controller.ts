@@ -45,14 +45,14 @@ export class EvaluationsController {
 
   @RequirePermission(PERMISSIONS.EVALUATIONS_VIEW_ALL, PERMISSIONS.EVALUATIONS_VIEW_ASSIGNED)
   @Get("player/:playerId")
-  findForPlayer(@CurrentUser() user: AuthenticatedUser, @Param("playerId") playerId: string) {
-    return this.evaluationsService.findForPlayer(user, playerId);
+  findForPlayer(@CurrentUser() user: AuthenticatedUser, @Param("playerId") playerId: string, @Query("teamId") teamId?: string) {
+    return this.evaluationsService.findForPlayer(user, playerId, teamId);
   }
 
   @RequirePermission(PERMISSIONS.EVALUATIONS_VIEW_ALL, PERMISSIONS.EVALUATIONS_VIEW_ASSIGNED)
   @Get("player/:playerId/evolution")
-  getPlayerEvolution(@CurrentUser() user: AuthenticatedUser, @Param("playerId") playerId: string) {
-    return this.evaluationsService.getPlayerEvolution(user, playerId);
+  getPlayerEvolution(@CurrentUser() user: AuthenticatedUser, @Param("playerId") playerId: string, @Query("teamId") teamId?: string) {
+    return this.evaluationsService.getPlayerEvolution(user, playerId, teamId);
   }
 
   @RequirePermission(PERMISSIONS.EVALUATIONS_VIEW_ALL, PERMISSIONS.EVALUATIONS_VIEW_ASSIGNED)

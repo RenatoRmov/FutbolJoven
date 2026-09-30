@@ -25,12 +25,14 @@ interface Appearance {
   };
 }
 
-export function MatchAppearancesTab({ playerId }: { playerId: string }) {
+export function MatchAppearancesTab({ playerId, teamId }: { playerId: string; teamId?: string }) {
   const [appearances, setAppearances] = useState<Appearance[] | null>(null);
 
   useEffect(() => {
-    api.get<Appearance[]>(`/fixtures/player/${playerId}/appearances`).then(setAppearances);
-  }, [playerId]);
+    setAppearances(null);
+    const teamQuery = teamId ? `?teamId=${teamId}` : "";
+    api.get<Appearance[]>(`/fixtures/player/${playerId}/appearances${teamQuery}`).then(setAppearances);
+  }, [playerId, teamId]);
 
   const minutesChartData = useMemo(
     () =>

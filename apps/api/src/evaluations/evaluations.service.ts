@@ -119,17 +119,26 @@ export class EvaluationsService {
     return { created: created.length };
   }
 
-  async findForPlayer(user: AuthenticatedUser, playerId: string) {
+  /**
+   * `teamId` scopes to the category being viewed — a player who plays for
+   * more than one team (e.g. a Sub-15 who "sube" to play some Sub-16
+   * matches) has separate Evaluation rows per team, and without this filter
+   * they'd all pool together regardless of which category page you're on.
+   * Omitted only for direct navigation with no team context, where it falls
+   * back to the player's current team (previous behavior).
+   */
+  async findForPlayer(user: AuthenticatedUser, playerId: string, teamId?: string) {
     const player = await this.prisma.player.findUnique({ where: { id: playerId } });
     if (!player) throw new NotFoundException("Jugador no encontrado");
-    if (player.currentTeamId) {
-      assertTeamInScope(user, player.currentTeamId, PERMISSIONS.EVALUATIONS_VIEW_ALL, PERMISSIONS.EVALUATIONS_VIEW_ASSIGNED);
+    const scopeTeamId = teamId ?? player.currentTeamId;
+    if (scopeTeamId) {
+      assertTeamInScope(user, scopeTeamId, PERMISSIONS.EVALUATIONS_VIEW_ALL, PERMISSIONS.EVALUATIONS_VIEW_ASSIGNED);
     } else if (!user.permissions.includes(PERMISSIONS.EVALUATIONS_VIEW_ALL)) {
       return [];
     }
 
     const evaluations = await this.prisma.evaluation.findMany({
-      where: { playerId },
+      where: { playerId, ...(teamId ? { teamId } : {}) },
       include: evaluationInclude,
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     });
@@ -157,12 +166,13 @@ export class EvaluationsService {
    * code (not SQL) since the evaluation count per player is small (dozens,
    * not millions).
    */
-  async getPlayerEvolution(user: AuthenticatedUser, playerId: string) {
+  async getPlayerEvolution(user: AuthenticatedUser, playerId: string, teamId?: string) {
     const player = await this.prisma.player.findUnique({ where: { id: playerId } });
     if (!player) throw new NotFoundException("Jugador no encontrado");
     const emptyBucket = { series: [], radar: [], previousRadar: [], teamAverageRadar: [], notaFinalTrend: [], notaFinal: null, previousNotaFinal: null, estatus: null };
-    if (player.currentTeamId) {
-      assertTeamInScope(user, player.currentTeamId, PERMISSIONS.EVALUATIONS_VIEW_ALL, PERMISSIONS.EVALUATIONS_VIEW_ASSIGNED);
+    const scopeTeamId = teamId ?? player.currentTeamId;
+    if (scopeTeamId) {
+      assertTeamInScope(user, scopeTeamId, PERMISSIONS.EVALUATIONS_VIEW_ALL, PERMISSIONS.EVALUATIONS_VIEW_ASSIGNED);
     } else if (!user.permissions.includes(PERMISSIONS.EVALUATIONS_VIEW_ALL)) {
       return { match: emptyBucket, training: emptyBucket };
     }
@@ -173,7 +183,7 @@ export class EvaluationsService {
     });
 
     const evaluations = await this.prisma.evaluation.findMany({
-      where: { playerId },
+      where: { playerId, ...(teamId ? { teamId } : {}) },
       include: { scores: true },
       orderBy: { date: "asc" },
     });
@@ -181,8 +191,8 @@ export class EvaluationsService {
     const matchEvaluations = evaluations.filter((ev) => ev.type === "MATCH");
     const trainingEvaluations = evaluations.filter((ev) => ev.type === "TRAINING");
 
-    const [matchTeamAverages, trainingTeamAverages] = player.currentTeamId
-      ? await Promise.all([this.getTeamAverages(player.currentTeamId, dimensions, "MATCH"), this.getTeamAverages(player.currentTeamId, dimensions, "TRAINING")])
+    const [matchTeamAverages, trainingTeamAverages] = scopeTeamId
+      ? await Promise.all([this.getTeamAverages(scopeTeamId, dimensions, "MATCH"), this.getTeamAverages(scopeTeamId, dimensions, "TRAINING")])
       : [dimensions.map((d) => ({ dimensionKey: d.key, dimensionName: d.name, value: null })), dimensions.map((d) => ({ dimensionKey: d.key, dimensionName: d.name, value: null }))];
 
     return {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { PERMISSIONS } from "@futboljoven/shared";
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -67,6 +67,12 @@ function classifyImc(imc: number | null): string {
 
 export default function PlayerProfilePage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  // Scopes Evaluaciones y Minutos/Partidos a la categoría desde la que se
+  // navegó — un jugador que juega para más de una categoría tiene datos
+  // separados por equipo (ver Evaluation.teamId / Match.teamId), y sin esto
+  // se mezclarían todos juntos sin importar qué categoría se está mirando.
+  const teamId = searchParams.get("teamId") ?? undefined;
   const { hasPermission } = useAuth();
   const [player, setPlayer] = useState<Player | null>(null);
   const [evolution, setEvolution] = useState<EvolutionResponse | null>(null);
@@ -77,10 +83,11 @@ export default function PlayerProfilePage() {
   useEffect(() => {
     if (!params.id) return;
     setLoading(true);
+    const teamQuery = teamId ? `?teamId=${teamId}` : "";
     Promise.all([
       api.get<Player>(`/players/${params.id}`),
-      api.get<EvolutionResponse>(`/evaluations/player/${params.id}/evolution`),
-      api.get<EvaluationListItem[]>(`/evaluations/player/${params.id}`),
+      api.get<EvolutionResponse>(`/evaluations/player/${params.id}/evolution${teamQuery}`),
+      api.get<EvaluationListItem[]>(`/evaluations/player/${params.id}${teamQuery}`),
     ])
       .then(([p, e, ev]) => {
         setPlayer(p);
@@ -88,7 +95,7 @@ export default function PlayerProfilePage() {
         setEvaluations(ev);
       })
       .finally(() => setLoading(false));
-  }, [params.id]);
+  }, [params.id, teamId]);
 
   useEffect(() => {
     if (!params.id || !hasPermission(PERMISSIONS.PHYSICAL_VIEW)) return;
@@ -352,7 +359,7 @@ export default function PlayerProfilePage() {
 
           {hasPermission(PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED) && (
             <TabsContent value="minutos" className="pt-5">
-              <MatchAppearancesTab playerId={player.id} />
+              <MatchAppearancesTab playerId={player.id} teamId={teamId} />
             </TabsContent>
           )}
 

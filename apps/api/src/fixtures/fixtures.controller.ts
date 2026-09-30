@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { createMatchSchema, PERMISSIONS, recordMatchResultSchema, updateMatchSchema } from "@futboljoven/shared";
 import { RequirePermission } from "../auth/decorators/require-permission.decorator";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
@@ -24,8 +24,8 @@ export class FixturesController {
 
   @RequirePermission(PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED)
   @Get("player/:playerId/appearances")
-  findAppearancesForPlayer(@CurrentUser() user: AuthenticatedUser, @Param("playerId") playerId: string) {
-    return this.fixturesService.findAppearancesForPlayer(user, playerId);
+  findAppearancesForPlayer(@CurrentUser() user: AuthenticatedUser, @Param("playerId") playerId: string, @Query("teamId") teamId?: string) {
+    return this.fixturesService.findAppearancesForPlayer(user, playerId, teamId);
   }
 
   @RequirePermission(PERMISSIONS.FIXTURES_VIEW_ALL, PERMISSIONS.FIXTURES_VIEW_ASSIGNED)
